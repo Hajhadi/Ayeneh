@@ -1,0 +1,13 @@
+{
+  "name": "@ayeneh/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Ayeneh API server",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  }
+}

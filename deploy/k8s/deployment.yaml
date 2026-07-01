@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ayeneh-api
+  labels:
+    app: ayeneh
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ayeneh
+      component: api
+  template:
+    metadata:
+      labels:
+        app: ayeneh
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: ayeneh/api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: ayeneh-config
+            - secretRef:
+                name: ayeneh-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/live
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi

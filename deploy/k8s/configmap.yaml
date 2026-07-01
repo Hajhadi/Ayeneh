@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ayeneh-config
+data:
+  AYENEH_DATABASE_URL: "postgresql+asyncpg://ayeneh:ayeneh@postgres:5432/ayeneh"
+  AYENEH_REDIS_URL: "redis://redis:6379/0"
+  AYENEH_LOG_FORMAT: "json"
+  AYENEH_LOG_LEVEL: "INFO"
+  AYENEH_OTEL_ENABLED: "false"

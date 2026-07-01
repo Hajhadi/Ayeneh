@@ -1,0 +1,1 @@
+"""Ayeneh — Cognitive Companion backend."""
