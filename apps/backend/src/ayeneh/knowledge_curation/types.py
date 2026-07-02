@@ -46,6 +46,12 @@ class RelationType(StrEnum):
     DIFFERENT_EVIDENCE = "different_evidence"
     HISTORICAL_INFLUENCE = "historical_influence"
 
+    # Semantic graph relations
+    CONTAINS = "contains"
+    APPEARS_IN = "appears_in"
+    BELONGS_TO = "belongs_to"
+    RELATED_TO = "related_to"
+
 
 # ---------------------------------------------------------------------------
 # Nodes
@@ -61,6 +67,9 @@ class KnowledgeNode:
     title: str = ""
     description: str = ""
     metadata: dict = field(default_factory=dict)
+    provenance_bundle_id: str = ""
+    version: int = 1
+    is_current: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -89,8 +98,23 @@ class ConceptNode(KnowledgeNode):
     aliases: list[str] = field(default_factory=list)
     definition: str = ""
     domain: str = ""
+    language: str = "en"
     hierarchy: list[str] = field(default_factory=list)
     related_concepts: list[str] = field(default_factory=list)
+    epistemic_profile_ids: list[str] = field(default_factory=list)
+    confidence_breakdown: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class TopicNode(KnowledgeNode):
+    """Node representing a topic grouping concepts."""
+
+    concept_ids: list[str] = field(default_factory=list)
+    book_id: str = ""
+    chapter_id: str = ""
+    epistemic_profile_id: str = ""
+    hierarchical_profile_id: str = ""
+    confidence: float = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -109,9 +133,11 @@ class KnowledgeEdge:
 
     # Relationship properties
     confidence: float = 0.5
+    confidence_breakdown: dict[str, float] = field(default_factory=dict)
     evidence: list[str] = field(default_factory=list)
+    evidence_references: list[str] = field(default_factory=list)
     reason: str = ""
-    provenance: str = ""
+    provenance_bundle_id: str = ""
 
     # Scope
     scope: str = ""
@@ -123,13 +149,30 @@ class KnowledgeEdge:
     target_authority: str = ""
     authority_domain: str = ""
 
-    # Versioning
+    # Engine version
+    engine_version: str = "1.0.0"
+
+    # Versioning (append-only: version increments, never modifies)
     version: int = 1
     is_active: bool = True
 
     # Timestamps
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
+class GraphVersion:
+    """A snapshot of the graph at a point in time."""
+
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    version_number: int = 0
+    node_count: int = 0
+    edge_count: int = 0
+    description: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    node_snapshot: dict[str, dict] = field(default_factory=dict)
+    edge_snapshot: dict[str, dict] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -141,13 +184,43 @@ class KnowledgeEdge:
 class KnowledgeGraphMetrics:
     """Metrics about the knowledge graph."""
 
+    # Node counts
     node_count: int = 0
+    book_count: int = 0
+    chapter_count: int = 0
+    topic_count: int = 0
+    concept_count: int = 0
+
+    # Edge counts
     edge_count: int = 0
     agreements: int = 0
     conflicts: int = 0
     complementary: int = 0
     authority_relations: int = 0
     scope_relations: int = 0
+    contains_edges: int = 0
+    appears_in_edges: int = 0
+    belongs_to_edges: int = 0
+    related_to_edges: int = 0
+
+    # Density
+    concept_density: float = 0.0
+    topic_density: float = 0.0
+
+    # Cross-book
+    cross_book_concepts: int = 0
+    isolated_concepts: int = 0
+    isolated_topics: int = 0
+
+    # Connectivity
+    average_degree: float = 0.0
+    most_connected_concepts: list[str] = field(default_factory=list)
+    most_connected_topics: list[str] = field(default_factory=list)
+
+    # Growth
+    graph_growth_rate: float = 0.0
+
+    # Confidence
     average_confidence: float = 0.0
     active_edges: int = 0
     inactive_edges: int = 0

@@ -1,6 +1,13 @@
 """Epistemic Safety Layer — single owner of epistemic validation."""
 
 from ayeneh.epistemic_safety.engine import EpistemicSafetyEngine
+from ayeneh.epistemic_safety.ocr_policy import (
+    AyenehOCRPolicy,
+    BusinessOCRPolicy,
+    CareerOCRPolicy,
+    OCRConfidencePolicy,
+    get_ocr_policy,
+)
 from ayeneh.epistemic_safety.pipeline import (
     PipelineContext,
     PipelineMetrics,
@@ -26,6 +33,9 @@ from ayeneh.epistemic_safety.types import (
 __all__ = [
     "AuthorityCheck",
     "AuthorityRisk",
+    "AyenehOCRPolicy",
+    "BusinessOCRPolicy",
+    "CareerOCRPolicy",
     "DependencyCheck",
     "DependencyRisk",
     "EpistemicSafetyEngine",
@@ -33,6 +43,7 @@ __all__ = [
     "EpistemicSafetyResult",
     "EvidenceStatus",
     "FrameworkAttribution",
+    "OCRConfidencePolicy",
     "PipelineContext",
     "PipelineMetrics",
     "PipelineResult",
@@ -42,4 +53,5 @@ __all__ = [
     "SafetyRecommendation",
     "StatementClassification",
     "UncertaintyLevel",
+    "get_ocr_policy",
 ]

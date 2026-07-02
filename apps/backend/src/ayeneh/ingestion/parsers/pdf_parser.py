@@ -20,13 +20,14 @@ class PDFParser(DocumentParser):
         import fitz
 
         doc = fitz.open(stream=content, filetype="pdf")
+        page_count = len(doc)
         chapters: list[Chapter] = []
         full_text_parts: list[str] = []
         current_chapter_title = "Untitled"
         current_chapter_text: list[str] = []
         sequence = 0
 
-        for page_num in range(len(doc)):
+        for page_num in range(page_count):
             page = doc.load_page(page_num)
             text = page.get_text("text")
             if not text.strip():
@@ -66,7 +67,7 @@ class PDFParser(DocumentParser):
             source_format="pdf",
             chapters=chapters,
             full_text="\n".join(full_text_parts),
-            metadata={"page_count": len(doc) if doc else 0},
+            metadata={"page_count": page_count},
         )
 
     def _detect_heading(self, text: str) -> str | None:

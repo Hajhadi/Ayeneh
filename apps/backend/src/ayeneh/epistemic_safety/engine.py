@@ -15,6 +15,7 @@ from typing import Any
 
 import structlog
 
+from ayeneh.epistemic_safety.ocr_policy import OCRConfidencePolicy, get_ocr_policy
 from ayeneh.epistemic_safety.types import (
     AuthorityCheck,
     AuthorityRisk,
@@ -468,6 +469,13 @@ class EpistemicSafetyEngine:
         )
         result.stages_completed.append("uncertainty_calibration")
 
+        # Stage 5b: OCR Confidence Calibration
+        ocr_confidence = ctx.get("ocr_confidence", 1.0)
+        review_status = ctx.get("review_status", "none")
+        if ocr_confidence < 1.0 or review_status == "needs_review":
+            result = self._calibrate_ocr_confidence(result, ocr_confidence, review_status)
+        result.stages_completed.append("ocr_confidence_calibration")
+
         # Stage 6: Dependency detection
         dep_check = self._dependency_detector.detect(response)
         result.dependency_check = dep_check
@@ -509,6 +517,47 @@ class EpistemicSafetyEngine:
         # Split by sentence boundaries
         sentences = re.split(r'[.!?]+', text)
         return [s.strip() for s in sentences if s.strip()]
+
+    def _calibrate_ocr_confidence(
+        self,
+        result: EpistemicSafetyResult,
+        ocr_confidence: float,
+        review_status: str,
+        product_id: str = "ayeneh",
+    ) -> EpistemicSafetyResult:
+        """Calibrate safety score based on OCR confidence using policy.
+
+        The policy determines how OCR confidence influences:
+        - confidence calibration
+        - uncertainty wording
+        - evidence weighting
+        - citation preference
+        - source preference
+
+        The engine never knows numeric thresholds. It only consumes the policy.
+        """
+        policy = get_ocr_policy(product_id)
+
+        # Apply policy-based confidence calibration
+        result.overall_safety_score = policy.calibrate_confidence(
+            result.overall_safety_score, ocr_confidence, review_status,
+        )
+
+        # Apply policy-based uncertainty increase
+        if policy.should_increase_uncertainty(ocr_confidence, review_status):
+            if result.uncertainty_level == UncertaintyLevel.LOW:
+                result.uncertainty_level = UncertaintyLevel.MEDIUM
+            elif result.uncertainty_level == UncertaintyLevel.VERY_LOW:
+                result.uncertainty_level = UncertaintyLevel.LOW
+
+        # Apply policy-based scope limitation
+        penalty = policy.confidence_penalty(ocr_confidence)
+        if penalty > 0:
+            result.scope_violations.append(
+                f"Source text was OCR-extracted (confidence penalty: {penalty:.0%})"
+            )
+
+        return result
 
     def _compute_safety_score(self, result: EpistemicSafetyResult) -> float:
         """Compute overall safety score."""

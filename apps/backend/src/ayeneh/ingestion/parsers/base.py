@@ -16,6 +16,7 @@ class Chapter:
     content: str
     page_start: int | None = None
     page_end: int | None = None
+    text_source: str = "native"  # "native" | "ocr" | "mixed"
 
 
 @dataclass
@@ -28,6 +29,7 @@ class ParsedDocument:
     chapters: list[Chapter] = field(default_factory=list)
     full_text: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    text_source: str = "native"  # "native" | "ocr" | "mixed"
 
 
 class DocumentParser(ABC):
