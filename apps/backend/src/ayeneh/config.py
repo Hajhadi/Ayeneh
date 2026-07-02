@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     # Per-provider API keys (never hardcoded, env-only)
     llm_openai_api_key: str = ""
+    llm_openai_base_url: str = ""
     llm_anthropic_api_key: str = ""
     llm_gemini_api_key: str = ""
     llm_litellm_api_key: str = ""

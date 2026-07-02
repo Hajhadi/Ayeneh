@@ -26,9 +26,10 @@ class OpenAIProvider(BaseProvider):
 
     provider_name: str = "openai"
 
-    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini", **kwargs: Any) -> None:
-        super().__init__(api_key=api_key, model=model, **kwargs)
+    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini", base_url: str = "", **kwargs: Any) -> None:
+        super().__init__(api_key=api_key, model=model, base_url=base_url, **kwargs)
         self.default_config = LLMConfig(model=model)
+        self._base_url = base_url or "https://api.openai.com/v1"
 
     async def chat(
         self,
@@ -62,7 +63,7 @@ class OpenAIProvider(BaseProvider):
 
                 async with httpx.AsyncClient(timeout=cfg.timeout_seconds) as client:
                     resp = await client.post(
-                        "https://api.openai.com/v1/chat/completions",
+                        f"{self._base_url}/chat/completions",
                         headers={
                             "Authorization": f"Bearer {self.api_key}",
                             "Content-Type": "application/json",
@@ -107,7 +108,10 @@ class OpenAIProvider(BaseProvider):
                 logger.warning("openai_error", error=str(exc), attempt=attempt)
                 if attempt >= self.max_retries:
                     raise
-                await asyncio.sleep(self.retry_base_delay_ms * (2 ** attempt) / 1000)
+                # Longer delay for rate limits (429)
+                is_rate_limit = "429" in str(exc) or "Too Many Requests" in str(exc)
+                delay = 30.0 if is_rate_limit else self.retry_base_delay_ms * (2 ** attempt) / 1000
+                await asyncio.sleep(delay)
 
         raise RuntimeError("OpenAI retry exhausted")
 
@@ -131,7 +135,7 @@ class OpenAIProvider(BaseProvider):
             async with httpx.AsyncClient(timeout=cfg.timeout_seconds) as client:
                 async with client.stream(
                     "POST",
-                    "https://api.openai.com/v1/chat/completions",
+                    f"{self._base_url}/chat/completions",
                     headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                     json=payload,
                 ) as resp:
@@ -164,7 +168,7 @@ class OpenAIProvider(BaseProvider):
         emb_model = model or "text-embedding-3-small"
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                "https://api.openai.com/v1/embeddings",
+                f"{self._base_url}/embeddings",
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                 json={"model": emb_model, "input": texts},
             )

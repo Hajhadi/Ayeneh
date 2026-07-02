@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from ayeneh.config import Settings, get_settings
 import structlog
@@ -20,6 +20,77 @@ if TYPE_CHECKING:
     from ayeneh.prompts.prompt_service import PromptService
     from ayeneh.runtime.executor import ExecutionExecutor
     from ayeneh.runtime.planner import ExecutionPlanner
+
+
+logger = structlog.get_logger(__name__)
+
+
+class ProviderGatewayAdapter:
+    """Adapts OpenAIProvider (LLMConfig interface) to LLMGateway (dict interface).
+
+    ConversationAgent expects: chat(messages, model=, temperature=, max_tokens=)
+    OpenAIProvider expects: chat(messages, config=LLMConfig)
+    """
+
+    def __init__(self, provider: Any) -> None:
+        self._provider = provider
+
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str = "",
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        stream: bool = False,
+    ) -> dict[str, Any]:
+        from ayeneh.llm.types import LLMConfig, LLMMessage
+
+        llm_messages = [LLMMessage(role=m.get("role", "user"), content=m.get("content", "")) for m in messages]
+        config = LLMConfig(
+            model=model or "gpt-4o-mini",
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        result = await self._provider.chat(llm_messages, config=config)
+
+        return {
+            "choices": [
+                {
+                    "message": {"content": result.content},
+                    "finish_reason": result.finish_reason,
+                }
+            ],
+            "usage": {
+                "prompt_tokens": result.usage.prompt_tokens,
+                "completion_tokens": result.usage.completion_tokens,
+                "total_tokens": result.usage.total_tokens,
+            },
+        }
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str = "",
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncIterator[dict[str, Any]]:
+        from ayeneh.llm.types import LLMConfig, LLMMessage
+
+        llm_messages = [LLMMessage(role=m.get("role", "user"), content=m.get("content", "")) for m in messages]
+        config = LLMConfig(
+            model=model or "gpt-4o-mini",
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        async for chunk in self._provider.chat_stream(llm_messages, config=config):
+            if chunk.delta:
+                yield {"choices": [{"delta": {"content": chunk.delta}}]}
+            if chunk.finish_reason:
+                yield {"choices": [{"delta": {}, "finish_reason": chunk.finish_reason}]}
 
 logger = structlog.get_logger(__name__)
 
@@ -127,6 +198,21 @@ class Container:
         self.product_registry = load_default_profiles()
         self.product_metrics = ProductMetrics()
 
+        # Application services
+        uow_factory = self._make_uow_factory()
+
+        from ayeneh.application.services.library import LibraryService
+        self.library_service = LibraryService(uow_factory=uow_factory) if uow_factory else None
+
+        from ayeneh.application.services.pattern import PatternService
+        self.pattern_service = PatternService(uow_factory=uow_factory) if uow_factory else None
+
+        from ayeneh.application.services.reflection import ReflectionService
+        self.reflection_service = ReflectionService(uow_factory=uow_factory) if uow_factory else None
+
+        from ayeneh.application.services.memory import MemoryService
+        self.memory_service = MemoryService(uow_factory=uow_factory) if uow_factory else None
+
         # Goal engine
         from ayeneh.goal.service import GoalService
         from ayeneh.goal.evolution import GoalEvolutionService
@@ -141,12 +227,15 @@ class Container:
         self.goal_metrics = GoalMetrics()
         self.goal_events = GoalEventPublisher(self.event_bus)
 
-        self.conversation_agent = ConversationAgent(llm=self.llm_gateway)
+        # Wrap provider with adapter to match ConversationAgent's LLMGateway interface
+        adapted_llm = ProviderGatewayAdapter(self.llm_gateway) if self.llm_gateway else None
+
+        self.conversation_agent = ConversationAgent(llm=adapted_llm)
         self.memory_agent = MemoryAgent()
         self.library_agent = LibraryAgent()
         self.pattern_agent = PatternAgent()
-        self.reflection_agent = ReflectionAgent(llm=self.llm_gateway)
-        self.blind_spot_agent = BlindSpotAgent(llm=self.llm_gateway)
+        self.reflection_agent = ReflectionAgent(llm=adapted_llm)
+        self.blind_spot_agent = BlindSpotAgent(llm=adapted_llm)
 
         agent_names = {
             "conversation", "memory", "library",

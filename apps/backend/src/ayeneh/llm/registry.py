@@ -100,6 +100,7 @@ def initialize_providers(settings: Settings | None = None) -> ProviderRegistry:
             provider = OpenAIProvider(
                 model=settings.llm_default_model,
                 api_key=settings.llm_openai_api_key,
+                base_url=settings.llm_openai_base_url,
             )
             registry.register("openai", provider)
         except Exception as exc:

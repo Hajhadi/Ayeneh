@@ -17,7 +17,9 @@ export default function ChatPage() {
   const { data: messagesData } = useConversationMessages(activeConversationId);
 
   useEffect(() => {
-    if (messagesData?.data) setMessages(messagesData.data);
+    if (messagesData?.data && messagesData.data.length > 0) {
+      setMessages(messagesData.data);
+    }
   }, [messagesData, setMessages]);
 
   const onSelect = useCallback((id: string) => {
