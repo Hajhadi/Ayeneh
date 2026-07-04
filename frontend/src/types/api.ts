@@ -95,6 +95,40 @@ export interface Book {
   created_at: string;
 }
 
+export interface EpistemicProfile {
+  id: string;
+  book_id: string;
+  tradition: string;
+  framework: string;
+  discipline: string;
+  evidence_level: string;
+  reasoning_style: string;
+  authority: string;
+  primary_topics: string[];
+  secondary_topics: string[];
+  supported_questions: string[];
+  unsupported_questions: string[];
+  claim_types: string[];
+  limitations: Array<{ description: string; severity: string; affected_domains?: string[] }>;
+  scope_boundary: { included_topics: string[]; excluded_topics: string[]; overlap_notes: string[] };
+  citation_policy: { required: boolean; format: string; min_confidence: number };
+  source_reliability: { score: number; basis: string };
+  language: string;
+}
+
+export interface RegenerateProfileResult {
+  profile_id: string;
+  book_id: string;
+  framework: string;
+  discipline: string;
+  evidence_level: string;
+  reasoning_style: string;
+  is_valid: boolean;
+  validation_errors: string[];
+  validation_warnings: string[];
+  duration_ms: number;
+}
+
 export interface Chapter {
   id: string;
   book_id: string;

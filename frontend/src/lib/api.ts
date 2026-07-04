@@ -2,6 +2,7 @@ import { api } from '@/lib/api-client';
 import type {
   Book,
   Conversation,
+  EpistemicProfile,
   ExecutionRecord,
   Job,
   Memory,
@@ -10,6 +11,7 @@ import type {
   Pattern,
   QueueStatus,
   Reflection,
+  RegenerateProfileResult,
   User,
   WorkerStatus,
   EvolutionEvent,
@@ -104,10 +106,16 @@ export const libraryApi = {
     api.get<PaginatedResponse<Book>>('/api/v1/library/books', params as Record<string, string>),
   get: (id: string) => api.get<Book>(`/api/v1/library/books/${id}`),
   upload: (data: { title: string; author?: string; content: string; filename: string }) =>
-    api.post<{ id: string; status: string }>('/api/v1/library/upload', data),
+    api.post<{ id: string; status: string }>('/api/v1/library/books', data),
   delete: (id: string) => api.delete(`/api/v1/library/books/${id}`),
   reindex: (id: string) => api.post(`/api/v1/library/books/${id}/reindex`),
   progress: (id: string) => api.get<{ status: string; total_chunks: number; processed: number }>(`/api/v1/library/books/${id}/progress`),
+  getProfile: (id: string) => api.get<EpistemicProfile>(`/api/v1/library/books/${id}/profile`),
+  regenerateProfile: (id: string) => api.post<RegenerateProfileResult>(`/api/v1/library/books/${id}/regenerate-profile`),
+  addText: (id: string, content: string, generateProfile = true) =>
+    api.post<{ book_id: string; chunks_created: number; total_words: number; profile: RegenerateProfileResult | null }>(
+      `/api/v1/library/books/${id}/text`, { content, generate_profile: generateProfile },
+    ),
 };
 
 /* ── Jobs ── */

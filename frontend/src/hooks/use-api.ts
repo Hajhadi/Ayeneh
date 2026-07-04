@@ -281,6 +281,36 @@ export function useBookProgress(id: string | null) {
   });
 }
 
+export function useBookProfile(bookId: string | null) {
+  return useQuery({
+    queryKey: ['book-profile', bookId],
+    queryFn: () => libraryApi.getProfile(bookId!),
+    enabled: !!bookId,
+  });
+}
+
+export function useRegenerateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (bookId: string) => libraryApi.regenerateProfile(bookId),
+    onSuccess: (_data, bookId) => {
+      qc.invalidateQueries({ queryKey: ['book-profile', bookId] });
+    },
+  });
+}
+
+export function useAddBookText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, content }: { bookId: string; content: string }) =>
+      libraryApi.addText(bookId, content),
+    onSuccess: (_data, { bookId }) => {
+      qc.invalidateQueries({ queryKey: ['books'] });
+      qc.invalidateQueries({ queryKey: ['book-profile', bookId] });
+    },
+  });
+}
+
 /* ── Jobs hooks ── */
 export function useJob(id: string | null) {
   return useQuery({

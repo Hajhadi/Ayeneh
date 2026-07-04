@@ -57,7 +57,20 @@ class RuleBasedProfileGenerator:
 
     Works without any LLM. Generates profiles based on
     document structure, content analysis, and domain heuristics.
+    Supports both English and Persian (Farsi) keyword detection.
     """
+
+    @staticmethod
+    def _has_keyword(text: str, keywords: list[str]) -> bool:
+        """Check if text contains any keyword (handles Persian + English)."""
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in keywords)
+
+    @staticmethod
+    def _count_keywords(text: str, keywords: list[str]) -> int:
+        """Count keyword matches in text."""
+        text_lower = text.lower()
+        return sum(1 for kw in keywords if kw in text_lower)
 
     def generate(
         self,
@@ -244,33 +257,81 @@ class RuleBasedProfileGenerator:
             KnowledgeDomain.PRACTICAL: 0.0,
         }
 
-        # Title keywords (high weight)
+        # Title keywords (high weight) — English + Persian
         title_keywords: dict[KnowledgeDomain, list[str]] = {
-            KnowledgeDomain.PHILOSOPHY: ["philosophy", "philosophical", "metaphysics", "epistemology", "ontology", "ethics"],
-            KnowledgeDomain.PSYCHOLOGY: ["psychology", "psychological", "cognitive", "behavior", "mental", "therapy", "clinical"],
-            KnowledgeDomain.SPIRITUALITY: ["spiritual", "meditation", "mysticism", "contemplation", "zen", "sufi", "religious"],
-            KnowledgeDomain.SCIENCE: ["science", "scientific", "research", "study", "data", "evidence", "neuroscience"],
-            KnowledgeDomain.HISTORY: ["history", "historical", "century", "ancient", "civilization"],
-            KnowledgeDomain.LITERATURE: ["literature", "literary", "novel", "poetry", "narrative"],
-            KnowledgeDomain.SOCIAL_SCIENCE: ["sociology", "social", "culture", "society", "political"],
-            KnowledgeDomain.PRACTICAL: ["guide", "how to", "practice", "technique", "method", "workbook"],
+            KnowledgeDomain.PHILOSOPHY: [
+                "philosophy", "philosophical", "metaphysics", "epistemology", "ontology", "ethics",
+                "فلسفه", "فلسفی", "معرفت‌شناسی", "هستی‌شناسی", "اخلاق", "منطق",
+            ],
+            KnowledgeDomain.PSYCHOLOGY: [
+                "psychology", "psychological", "cognitive", "behavior", "mental", "therapy", "clinical",
+                "روانشناسی", "روانی", "شناختی", "رفتار", "درمان", "بالینی", "焦虑", "اضطراب",
+            ],
+            KnowledgeDomain.SPIRITUALITY: [
+                "spiritual", "meditation", "mysticism", "contemplation", "zen", "sufi", "religious",
+                "معنوی", "مراقبه", "ذکر", "تصوف", "صوفی", "عرفان", "冥想", "سیر و سلوک", "زهد", "عبادت",
+            ],
+            KnowledgeDomain.SCIENCE: [
+                "science", "scientific", "research", "study", "data", "evidence", "neuroscience",
+                "علم", "科学", "پژوهش", "مطالعه", "داده", "شواهد", "neuroscience", "مغز",
+            ],
+            KnowledgeDomain.HISTORY: [
+                "history", "historical", "century", "ancient", "civilization",
+                "تاریخ", "تاریخی", "قرن", "باستان", "تمدن",
+            ],
+            KnowledgeDomain.LITERATURE: [
+                "literature", "literary", "novel", "poetry", "narrative",
+                "ادبیات", "ادبی", "رمان", "شعر", "داستان",
+            ],
+            KnowledgeDomain.SOCIAL_SCIENCE: [
+                "sociology", "social", "culture", "society", "political",
+                "جامعه‌شناسی", "اجتماعی", "فرهنگ", "جامعه", "سیاسی",
+            ],
+            KnowledgeDomain.PRACTICAL: [
+                "guide", "how to", "practice", "technique", "method", "workbook",
+                "راهنما", "روش", "تکنیک", "تمرین", "کتاب کار",
+            ],
         }
 
         for domain, keywords in title_keywords.items():
             for kw in keywords:
-                if kw in title_lower:
+                if kw in title_lower or kw in text_lower:
                     domain_scores[domain] += 3.0
 
-        # Content keywords (lower weight)
+        # Content keywords (lower weight) — English + Persian
         content_keywords: dict[KnowledgeDomain, list[str]] = {
-            KnowledgeDomain.PHILOSOPHY: ["truth", "reality", "existence", "meaning", "reason", "logic", "argument"],
-            KnowledgeDomain.PSYCHOLOGY: ["mind", "brain", "behavior", "emotion", "cognition", "therapy", "disorder"],
-            KnowledgeDomain.SPIRITUALITY: ["meditation", "prayer", "contemplation", "enlightenment", "awakening", "spirit"],
-            KnowledgeDomain.SCIENCE: ["experiment", "hypothesis", "theory", "data", "empirical", "study", "research"],
-            KnowledgeDomain.HISTORY: ["century", "era", "period", "ancient", "medieval", "modern", "civilization"],
-            KnowledgeDomain.LITERATURE: ["story", "narrative", "character", "plot", "theme", "symbol", "metaphor"],
-            KnowledgeDomain.SOCIAL_SCIENCE: ["society", "culture", "community", "social", "power", "inequality"],
-            KnowledgeDomain.PRACTICAL: ["practice", "exercise", "technique", "step", "method", "guide", "how to"],
+            KnowledgeDomain.PHILOSOPHY: [
+                "truth", "reality", "existence", "meaning", "reason", "logic", "argument",
+                "حقیقت", "واقعیت", "هستی", "معنا", "عقل", "منطق", "استدلال", "وجود",
+            ],
+            KnowledgeDomain.PSYCHOLOGY: [
+                "mind", "brain", "behavior", "emotion", "cognition", "therapy", "disorder",
+                "ذهن", "مغز", "رفتار", "احساس", "شناخت", "درمان", "اختلال", "اضطراب", "افسردگی",
+            ],
+            KnowledgeDomain.SPIRITUALITY: [
+                "meditation", "prayer", "contemplation", "enlightenment", "awakening", "spirit",
+                "مراقبه", "نماز", "ذکر", "تامل", "بیداری", "روح", "عرفان", "سیر و سلوک", " zen",
+            ],
+            KnowledgeDomain.SCIENCE: [
+                "experiment", "hypothesis", "theory", "data", "empirical", "study", "research",
+                "آزمایش", "فرضیه", "نظریه", "داده", "تجربی", "مطالعه", "پژوهش",
+            ],
+            KnowledgeDomain.HISTORY: [
+                "century", "era", "period", "ancient", "medieval", "modern", "civilization",
+                "قرن", "دوره", "باستان", "قرون وسطی", "مدرن", "تمدن",
+            ],
+            KnowledgeDomain.LITERATURE: [
+                "story", "narrative", "character", "plot", "theme", "symbol", "metaphor",
+                "داستان", "شخصیت", "طرح", "موضوع", "نماد", "استعاره",
+            ],
+            KnowledgeDomain.SOCIAL_SCIENCE: [
+                "society", "culture", "community", "social", "power", "inequality",
+                "جامعه", "فرهنگ", "اجتماعی", "قدرت", "نابرابری",
+            ],
+            KnowledgeDomain.PRACTICAL: [
+                "practice", "exercise", "technique", "step", "method", "guide", "how to",
+                "تمرین", "تکنیک", "مرحله", "روش", "راهنما",
+            ],
         }
 
         for domain, keywords in content_keywords.items():
@@ -302,16 +363,46 @@ class RuleBasedProfileGenerator:
         }
 
         framework_keywords: dict[EpistemicFramework, list[str]] = {
-            EpistemicFramework.RATIONALIST: ["reason", "logic", "argument", "proof", "deduction", "rational"],
-            EpistemicFramework.EMPIRICIST: ["evidence", "data", "observation", "experiment", "empirical", "measurement"],
-            EpistemicFramework.PHENOMENOLOGICAL: ["experience", "lived", "phenomenon", "consciousness", "perception"],
-            EpistemicFramework.HERMENEUTIC: ["interpret", "meaning", "text", "understanding", "hermeneutic"],
-            EpistemicFramework.DIALECTICAL: ["contradiction", "tension", "thesis", "antithesis", "synthesis", "dialectic"],
-            EpistemicFramework.PRAGMATIST: ["practical", "consequence", "action", "work", "function"],
-            EpistemicFramework.INTUITIONIST: ["intuition", "direct", "immediate", "inner", "contemplative"],
-            EpistemicFramework.NATURALISTIC: ["nature", "natural", "evolution", "biology", "ecology"],
-            EpistemicFramework.CONSTRUCTIVIST: ["construct", "build", "create", "social", "cultural"],
-            EpistemicFramework.CRITICAL: ["power", "critique", "justice", "inequality", "oppression"],
+            EpistemicFramework.RATIONALIST: [
+                "reason", "logic", "argument", "proof", "deduction", "rational",
+                "عقل", "منطق", "استدلال", "اثبات", "برهان", "عقلانی",
+            ],
+            EpistemicFramework.EMPIRICIST: [
+                "evidence", "data", "observation", "experiment", "empirical", "measurement",
+                "شواهد", "داده", "مشاهده", "آزمایش", "تجربی", "اندازه‌گیری",
+            ],
+            EpistemicFramework.PHENOMENOLOGICAL: [
+                "experience", "lived", "phenomenon", "consciousness", "perception",
+                "تجربه", "زیسته", "پدیدار", "آگاهی", "ادراک", "شعور",
+            ],
+            EpistemicFramework.HERMENEUTIC: [
+                "interpret", "meaning", "text", "understanding", "hermeneutic",
+                "تفسیر", "معنا", "متن", "فهم", "تأویل",
+            ],
+            EpistemicFramework.DIALECTICAL: [
+                "contradiction", "tension", "thesis", "antithesis", "synthesis", "dialectic",
+                "تناقض", "کشش", "تز", "آنتیتز", "سنتز", " dialectic",
+            ],
+            EpistemicFramework.PRAGMATIST: [
+                "practical", "consequence", "action", "work", "function",
+                "عملی", "نتیجه", "عمل", "کارکرد",
+            ],
+            EpistemicFramework.INTUITIONIST: [
+                "intuition", "direct", "immediate", "inner", "contemplative",
+                "شهود", "بی‌واسطه", "درونی", "تاملی", ".med",
+            ],
+            EpistemicFramework.NATURALISTIC: [
+                "nature", "natural", "evolution", "biology", "ecology",
+                "طبیعت", "طبیعی", "تکامل", "زیست‌شناسی", "بوم‌شناسی",
+            ],
+            EpistemicFramework.CONSTRUCTIVIST: [
+                "construct", "build", "create", "social", "cultural",
+                "ساختن", "ایجاد", "اجتماعی", "فرهنگی",
+            ],
+            EpistemicFramework.CRITICAL: [
+                "power", "critique", "justice", "inequality", "oppression",
+                "قدرت", "نقد", "عدالت", "نابرابری", "سرکوب",
+            ],
         }
 
         for framework, keywords in framework_keywords.items():
@@ -354,16 +445,25 @@ class RuleBasedProfileGenerator:
             KnowledgeDomain.PRACTICAL: EvidenceLevel.ANECDOTAL,
         }
 
-        # Check for empirical indicators
-        empirical_indicators = ["study", "research", "data", "experiment", "statistical", "empirical"]
+        # Check for empirical indicators (English + Persian)
+        empirical_indicators = [
+            "study", "research", "data", "experiment", "statistical", "empirical",
+            "پژوهش", "مطالعه", "داده", "آزمایش", "آماری", "تجربی", "اندازه‌گیری",
+        ]
         empirical_count = sum(1 for ind in empirical_indicators if ind in text_lower)
 
-        # Check for experiential indicators
-        experiential_indicators = ["experience", "felt", "lived", "personal", "subjective"]
+        # Check for experiential indicators (English + Persian)
+        experiential_indicators = [
+            "experience", "felt", "lived", "personal", "subjective",
+            "تجربه", "احساس", "زیسته", "شخصی", "ذاتی", "مراقبه", "meditation",
+        ]
         experiential_count = sum(1 for ind in experiential_indicators if ind in text_lower)
 
-        # Check for traditional indicators
-        traditional_indicators = ["tradition", "traditional", "ancient", "classic", "heritage"]
+        # Check for traditional indicators (English + Persian)
+        traditional_indicators = [
+            "tradition", "traditional", "ancient", "classic", "heritage",
+            "سنت", "سنتی", "باستانی", "کلاسیک", "میراث", "ance",
+        ]
         traditional_count = sum(1 for ind in traditional_indicators if ind in text_lower)
 
         if empirical_count > 3:
@@ -379,16 +479,25 @@ class RuleBasedProfileGenerator:
         """Detect the authority level."""
         text_lower = text.lower()
 
-        # Check for academic indicators
-        academic_indicators = ["professor", "university", "research", "peer-reviewed", "journal"]
+        # Check for academic indicators (English + Persian)
+        academic_indicators = [
+            "professor", "university", "research", "peer-reviewed", "journal",
+            "استاد", "دانشگاه", "پژوهش", "مجله", "علمی",
+        ]
         academic_count = sum(1 for ind in academic_indicators if ind in text_lower)
 
-        # Check for commentary indicators
-        commentary_indicators = ["commentary", "analysis", "interpretation", "critique"]
+        # Check for commentary indicators (English + Persian)
+        commentary_indicators = [
+            "commentary", "analysis", "interpretation", "critique",
+            "تفسیر", "تحلیل", "نقد", "تبیین",
+        ]
         commentary_count = sum(1 for ind in commentary_indicators if ind in text_lower)
 
-        # Check for reference indicators
-        reference_indicators = ["reference", "handbook", "manual", "guide", "compendium"]
+        # Check for reference indicators (English + Persian)
+        reference_indicators = [
+            "reference", "handbook", "manual", "guide", "compendium",
+            "مرجع", "کتاب مرجع", "راهنما",
+        ]
         reference_count = sum(1 for ind in reference_indicators if ind in text_lower)
 
         if academic_count > 2:
@@ -415,14 +524,14 @@ class RuleBasedProfileGenerator:
             KnowledgeDomain.PRACTICAL: ReasoningStyle.NARRATIVE,
         }
 
-        # Check for reasoning indicators
-        if any(w in text_lower for w in ["therefore", "thus", "consequently", "logically"]):
+        # Check for reasoning indicators (English + Persian)
+        if any(w in text_lower for w in ["therefore", "thus", "consequently", "logically", "بنابراین", "لذا", "پس", "منطقاً"]):
             return ReasoningStyle.DEDUCTIVE
-        if any(w in text_lower for w in ["pattern", "trend", "observe", "inductively"]):
+        if any(w in text_lower for w in ["pattern", "trend", "observe", "inductively", "الگو", "روند", "مشاهده"]):
             return ReasoningStyle.INDUCTIVE
-        if any(w in text_lower for w in ["contemplat", "meditat", "inner", "silence"]):
+        if any(w in text_lower for w in ["contemplat", "meditat", "inner", "silence", "مراقبه", "تامل", "درون", "سکوت", "meditation"]):
             return ReasoningStyle.CONTEMPLATIVE
-        if any(w in text_lower for w in ["story", "narrative", "journey", "once"]):
+        if any(w in text_lower for w in ["story", "narrative", "journey", "once", "داستان", "روایت", "سفر"]):
             return ReasoningStyle.NARRATIVE
 
         return domain_style.get(domain, ReasoningStyle.DEDUCTIVE)
@@ -432,17 +541,17 @@ class RuleBasedProfileGenerator:
         text_lower = text.lower()
         claim_types: list[ClaimType] = []
 
-        if any(w in text_lower for w in ["is", "are", "fact", "reality", "truth"]):
+        if any(w in text_lower for w in ["is", "are", "fact", "reality", "truth", "واقعیت", "حقیقت", "fact"]):
             claim_types.append(ClaimType.FACTUAL)
-        if any(w in text_lower for w in ["interpret", "meaning", "understand", "significance"]):
+        if any(w in text_lower for w in ["interpret", "meaning", "understand", "significance", "تفسیر", "معنا", "فهم"]):
             claim_types.append(ClaimType.INTERPRETIVE)
-        if any(w in text_lower for w in ["should", "ought", "moral", "ethical", "right"]):
+        if any(w in text_lower for w in ["should", "ought", "moral", "ethical", "right", "باید", "اخلاقی", "道德"]):
             claim_types.append(ClaimType.NORMATIVE)
-        if any(w in text_lower for w in ["describe", "description", "observed", "phenomenon"]):
+        if any(w in text_lower for w in ["describe", "description", "observed", "phenomenon", "توصیف", "پدیده"]):
             claim_types.append(ClaimType.DESCRIPTIVE)
-        if any(w in text_lower for w in ["like", "as if", "metaphor", "analogy"]):
+        if any(w in text_lower for w in ["like", "as if", "metaphor", "analogy", "استعاره", "تشبیه"]):
             claim_types.append(ClaimType.ANALOGICAL)
-        if any(w in text_lower for w in ["might", "possibly", "hypothesis", "speculate"]):
+        if any(w in text_lower for w in ["might", "possibly", "hypothesis", "speculate", "شاید", "فرضیه"]):
             claim_types.append(ClaimType.SPECULATIVE)
 
         if not claim_types:
@@ -454,35 +563,35 @@ class RuleBasedProfileGenerator:
         """Detect primary and secondary topics."""
         text_lower = text.lower()
 
-        # Domain-specific topic detection
+        # Domain-specific topic detection (English + Persian)
         topic_keywords: dict[KnowledgeDomain, dict[str, list[str]]] = {
             KnowledgeDomain.PHILOSOPHY: {
-                "metaphysics": ["reality", "existence", "being", "ontology"],
-                "epistemology": ["knowledge", "truth", "belief", "justification"],
-                "ethics": ["moral", "virtue", "duty", "right", "wrong"],
-                "logic": ["reason", "argument", "valid", "sound"],
-                "aesthetics": ["beauty", "art", "taste", "sublime"],
+                "metaphysics": ["reality", "existence", "being", "ontology", "واقعیت", "هستی", "وجود"],
+                "epistemology": ["knowledge", "truth", "belief", "justification", "دانش", "حقیقت", "باور"],
+                "ethics": ["moral", "virtue", "duty", "right", "wrong", "اخلاق", "فضیلت", "تکلیف"],
+                "logic": ["reason", "argument", "valid", "sound", "عقل", "استدلال", "منطق"],
+                "aesthetics": ["beauty", "art", "taste", "sublime", "زیبایی", "هنر"],
             },
             KnowledgeDomain.PSYCHOLOGY: {
-                "cognition": ["mind", "brain", "cognitive", "mental"],
-                "behavior": ["behavior", "action", "habit", "response"],
-                "emotion": ["emotion", "feeling", "affect", "mood"],
-                "therapy": ["therapy", "treatment", "clinical", "disorder"],
-                "development": ["development", "growth", "change", "lifespan"],
+                "cognition": ["mind", "brain", "cognitive", "mental", "ذهن", "مغز", "شناختی"],
+                "behavior": ["behavior", "action", "habit", "response", "رفتار", "عمل", "عادت"],
+                "emotion": ["emotion", "feeling", "affect", "mood", "احساس", "هیجان", "عاطفه"],
+                "therapy": ["therapy", "treatment", "clinical", "disorder", "درمان", "بالینی", "اختلال"],
+                "development": ["development", "growth", "change", "lifespan", "رشد", "تغییر"],
             },
             KnowledgeDomain.SPIRITUALITY: {
-                "meditation": ["meditation", "contemplation", "mindfulness"],
-                "mysticism": ["mystical", "mysticism", "神秘", "esoteric"],
-                "prayer": ["prayer", "devotion", "worship"],
-                "awakening": ["enlightenment", "awakening", "liberation"],
-                "ethics": ["virtue", "compassion", "love", "wisdom"],
+                "meditation": ["meditation", "contemplation", "mindfulness", "مراقبه", "تامل", "حضور ذهن"],
+                "mysticism": ["mystical", "mysticism", "esoteric", "عرفان", "تصوف", "صوفی"],
+                "prayer": ["prayer", "devotion", "worship", "نماز", "عبادت", "ذکر"],
+                "awakening": ["enlightenment", "awakening", "liberation", "بیداری", "آزادی", "رستگاری"],
+                "ethics": ["virtue", "compassion", "love", "wisdom", "فضی الفت", "مهربانی", "دانایی"],
             },
             KnowledgeDomain.SCIENCE: {
-                "neuroscience": ["brain", "neural", "neuroscience", "cognitive"],
-                "biology": ["biology", "evolution", "genetics", "organism"],
-                "physics": ["physics", "quantum", "energy", "matter"],
-                "psychology": ["psychology", "behavior", "cognition"],
-                "methodology": ["method", "research", "experiment", "study"],
+                "neuroscience": ["brain", "neural", "neuroscience", "cognitive", "مغز", "عصب", "شناختی"],
+                "biology": ["biology", "evolution", "genetics", "organism", "زیست", "تکامل", "ژنتیک"],
+                "physics": ["physics", "quantum", "energy", "matter", "فیزیک", "کوانتوم", "انرژی"],
+                "psychology": ["psychology", "behavior", "cognition", "روانشناسی", "رفتار", "شناخت"],
+                "methodology": ["method", "research", "experiment", "study", "روش", "پژوهش", "آزمایش"],
             },
         }
 
@@ -664,13 +773,38 @@ class RuleBasedProfileGenerator:
         text_lower = text.lower()
 
         traditions: dict[str, list[str]] = {
-            "analytic_philosophy": ["analytic", "logical", "language", "analysis"],
-            "continental_philosophy": ["continental", "phenomenology", "existential", "hermeneutic"],
-            "buddhist": ["buddhist", "buddhism", "dharma", "sangha", "zen", "vipassana"],
-            "sufi": ["sufi", "sufism", "mystical", "islamic mysticism"],
-            "cognitive_science": ["cognitive", "neural", "brain", "computation"],
-            "behavioral": ["behavioral", "behavior", "conditioning", "skinner"],
-            "humanistic": ["humanistic", "person-centered", "rogers", "maslow"],
+            "analytic_philosophy": [
+                "analytic", "logical", "language", "analysis",
+                "تحلیلی", "منطقی", "زبان",
+            ],
+            "continental_philosophy": [
+                "continental", "phenomenology", "existential", "hermeneutic",
+                "پدیدارشناسی", "وجودگرایی", "تأویلی",
+            ],
+            "buddhist": [
+                "buddhist", "buddhism", "dharma", "sangha", "zen", "vipassana",
+                "بودایی", "بودا", "دارما", " zen", "ویپاسانا",
+            ],
+            "sufi": [
+                "sufi", "sufism", "mystical", "islamic mysticism",
+                "صوفی", "تصوف", "عرفان", "اسلامی",
+            ],
+            "cognitive_science": [
+                "cognitive", "neural", "brain", "computation",
+                "شناختی", "عصبی", "مغز", "پردازش",
+            ],
+            "behavioral": [
+                "behavioral", "behavior", "conditioning", "skinner",
+                "رفتاری", "شرطی‌سازی",
+            ],
+            "humanistic": [
+                "humanistic", "person-centered", "rogers", "maslow",
+                "انسان‌گرا", "شخص‌محور",
+            ],
+            "persian_mysticism": [
+                "مولوی", "مولانا", "حافظ", "سعدی", "عطار", "صهبا",
+                "عرفان ایرانی", "شعر عرفانی",
+            ],
         }
 
         for tradition, keywords in traditions.items():
