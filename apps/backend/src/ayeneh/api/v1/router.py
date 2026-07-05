@@ -10,6 +10,7 @@ from ayeneh.api.v1.endpoints import (
     conversations,
     diagnostics,
     health,
+    inf,
     library,
     memo,
     memories,
@@ -36,5 +37,6 @@ api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(runtime.router, prefix="/runtime", tags=["runtime"])
 api_router.include_router(memo.router, prefix="/memo", tags=["memo"])
 api_router.include_router(cog.router, tags=["cognitive"])
+api_router.include_router(inf.router, prefix="/inf", tags=["inference"])
 api_router.include_router(goal_api.router, prefix="/goals", tags=["goals"])
 api_router.include_router(product_api.router, prefix="/products", tags=["products"])

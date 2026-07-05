@@ -95,6 +95,7 @@ class PipelineResult:
     generated_response: Any = None
     trace_record: Any = None
     cog_analysis: Any = None
+    inference_analysis: Any = None
     memo_analysis: Any = None
 
 
@@ -798,6 +799,51 @@ class AyenehPipeline:
                 cog_duration_ms = (time.monotonic() - cog_start) * 1000
                 logger.debug("cog_analysis_failed", error=str(exc))
                 await _emit("cog_analysis", "done", {"confidence": 0.5, "duration_ms": cog_duration_ms, "message": "تحلیل شناختی انجام نشد"})
+
+            # Stage 14.5: INF Inference Analysis
+            inf_start = time.monotonic()
+            await _emit("inference_analysis", "running", {"message": "تحلیل استنباطی..."})
+            try:
+                from ayeneh.inf.inference.engine import InferenceEngine
+                from ayeneh.inf.graph_reasoner.engine import GraphReasoningEngine
+                from ayeneh.inf.contradiction.engine import ContradictionResolver
+                from ayeneh.inf.hypothesis.engine import HypothesisEngine
+
+                inf_context = {
+                    "user_message": context.get("user_message", ""),
+                    "conversation_history": context.get("conversation_history", []),
+                    "cog_analysis": getattr(result, "cog_analysis", None),
+                }
+
+                inf_engine = InferenceEngine()
+                inf_result = inf_engine.process(inf_context, [])
+
+                graph_engine = GraphReasoningEngine()
+                graph_result = graph_engine.process(inf_context)
+
+                contradiction_engine = ContradictionResolver()
+                contradiction_result = contradiction_engine.process([], inf_context)
+
+                hypothesis_engine = HypothesisEngine()
+                hypothesis_result = hypothesis_engine.process([], None, inf_context)
+
+                result.inference_analysis = {
+                    "inferences": len(inf_result.inferences),
+                    "graph_patterns": len(graph_result.patterns),
+                    "contradictions": len(contradiction_result.contradictions),
+                    "hypotheses": len(hypothesis_result.hypotheses),
+                }
+
+                inf_duration_ms = (time.monotonic() - inf_start) * 1000
+                await _emit("inference_analysis", "done", {
+                    "confidence": 0.9,
+                    "duration_ms": inf_duration_ms,
+                    "message": f"{len(inf_result.inferences)} استنباط، {len(hypothesis_result.hypotheses)} فرضیه",
+                })
+            except Exception as exc:
+                inf_duration_ms = (time.monotonic() - inf_start) * 1000
+                logger.debug("inference_analysis_failed", error=str(exc))
+                await _emit("inference_analysis", "done", {"confidence": 0.5, "duration_ms": inf_duration_ms, "message": "تحلیل استنباطی انجام نشد"})
 
             # Stage 15: MEMO Memory Consolidation (after response)
             memo_start = time.monotonic()
