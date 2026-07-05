@@ -97,10 +97,12 @@ class ReasoningPipeline:
     """SPEC-24 compliant Reasoning pipeline.
 
     Transforms retrieved evidence into structured conclusions.
+    Uses AI Router for LLM-based reasoning when available (REA-007/021).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ai_router: Any = None) -> None:
         self._graph_reasoner = None
+        self._ai_router = ai_router
 
     def _init(self) -> None:
         if self._graph_reasoner is None:
@@ -242,7 +244,11 @@ class ReasoningPipeline:
     def _phase_reasoning_execution(
         self, interpretation: EvidenceInterpretation, query_analysis: Any
     ) -> dict[str, Any]:
-        """Execute reasoning over interpreted evidence."""
+        """Execute reasoning over interpreted evidence.
+
+        When AI Router is available, uses LLM for complex reasoning.
+        Falls back to local rule-based reasoning otherwise.
+        """
         facts = interpretation.facts
         conflicts = interpretation.conflicts
 
@@ -261,16 +267,24 @@ class ReasoningPipeline:
         else:
             mode = "single_source"
 
-        # Generate conclusions from facts
-        conclusions = []
-        for fact in facts:
-            conclusions.append({
-                "statement": fact["content"][:200],
-                "source": fact["source"],
-                "evidence_type": "retrieved_chunk",
-                "confidence": fact.get("confidence", 0.7),
-                "provenance": {"chunk_id": fact.get("chunk_id", ""), "source": fact["source"]},
-            })
+        # Try LLM-based reasoning via AI Router if available and complex enough
+        llm_conclusions = None
+        if self._ai_router and mode in ("cross_book", "comparative", "cross_tradition"):
+            llm_conclusions = self._try_llm_reasoning(facts, conflicts, mode, query_analysis)
+
+        # Generate conclusions: use LLM results if available, else local
+        if llm_conclusions:
+            conclusions = llm_conclusions
+        else:
+            conclusions = []
+            for fact in facts:
+                conclusions.append({
+                    "statement": fact["content"][:200],
+                    "source": fact["source"],
+                    "evidence_type": "retrieved_chunk",
+                    "confidence": fact.get("confidence", 0.7),
+                    "provenance": {"chunk_id": fact.get("chunk_id", ""), "source": fact["source"]},
+                })
 
         # Generate uncertainty statements
         uncertainty = []
@@ -280,6 +294,8 @@ class ReasoningPipeline:
             uncertainty.append("Limited evidence available for this query")
         if mode == "cross_book":
             uncertainty.append("Cross-book reasoning involves multiple perspectives")
+        if llm_conclusions:
+            uncertainty.append("Conclusions generated via LLM-assisted reasoning")
 
         # Assumptions
         assumptions = []
@@ -297,6 +313,82 @@ class ReasoningPipeline:
             "assumptions": assumptions,
             "uncertainty": uncertainty,
         }
+
+    def _try_llm_reasoning(
+        self, facts: list[dict], conflicts: list[dict], mode: str, query_analysis: Any
+    ) -> list[dict[str, Any]] | None:
+        """Attempt LLM-based reasoning via AI Router. Returns None on failure."""
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+
+            # Build evidence summary for LLM
+            evidence_text = "\n".join(
+                f"- [{f.get('source', 'unknown')}] {f.get('content', '')[:300]}"
+                for f in facts[:10]
+            )
+            conflict_text = ""
+            if conflicts:
+                conflict_text = "\nPotential conflicts:\n" + "\n".join(
+                    f"- {c.get('type', 'unknown')}" for c in conflicts[:5]
+                )
+
+            user_message = (
+                f"Based on the following evidence, provide structured conclusions "
+                f"for a {mode} reasoning task.\n\n"
+                f"Evidence:\n{evidence_text}\n{conflict_text}\n\n"
+                f"Return a JSON array of conclusions, each with: "
+                f"statement, source, confidence (0-1)."
+            )
+
+            messages = [
+                {"role": "system", "content": "You are a knowledge reasoning assistant. Analyze evidence and provide structured conclusions."},
+                {"role": "user", "content": user_message},
+            ]
+
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=user_message,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+
+            # Run async router in sync context
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            if loop.is_running():
+                return None  # Can't block in async context
+
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            # Parse LLM response
+            import json
+            # Try to extract JSON array from response
+            start = content.find("[")
+            end = content.rfind("]") + 1
+            if start >= 0 and end > start:
+                raw_conclusions = json.loads(content[start:end])
+                conclusions = []
+                for c in raw_conclusions[:10]:
+                    conclusions.append({
+                        "statement": c.get("statement", "")[:200],
+                        "source": c.get("source", "unknown"),
+                        "evidence_type": "llm_reasoned",
+                        "confidence": float(c.get("confidence", 0.6)),
+                        "provenance": {"method": "ai_router_llm", "mode": mode},
+                    })
+                return conclusions if conclusions else None
+
+        except Exception as exc:
+            logger.debug("llm_reasoning_fallback", error=str(exc))
+
+        return None
 
     # ------------------------------------------------------------------
     # Phase 4: Confidence Assessment (SPEC-24 §10)

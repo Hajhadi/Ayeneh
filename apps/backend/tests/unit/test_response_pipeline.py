@@ -147,3 +147,40 @@ class TestBackwardCompatibility:
         assert hasattr(result, 'overall_confidence')
         assert hasattr(result, 'validation_passed')
         assert hasattr(result, 'duration_ms')
+
+
+# ---------------------------------------------------------------------------
+# Streaming
+# ---------------------------------------------------------------------------
+
+
+class TestStreaming:
+    def test_is_streaming_field_default(self):
+        r = ResponseArtifact()
+        assert r.is_streaming is False
+
+    def test_is_streaming_field_set(self):
+        r = ResponseArtifact(is_streaming=True)
+        assert r.is_streaming is True
+
+    def test_stream_yields_artifacts(self, pipeline, simple_reasoning):
+        artifacts = list(pipeline.stream(simple_reasoning))
+        assert len(artifacts) == 2
+        assert artifacts[0].is_streaming is True
+        assert artifacts[1].is_streaming is False
+
+    def test_stream_text_matches_execute(self, pipeline, simple_reasoning):
+        artifacts = list(pipeline.stream(simple_reasoning))
+        execute_result = pipeline.execute(simple_reasoning)
+        assert artifacts[1].response_text == execute_result.response_text
+
+    def test_stream_calls_on_chunk(self, pipeline, simple_reasoning):
+        chunks = []
+        list(pipeline.stream(simple_reasoning, on_chunk=chunks.append))
+        assert len(chunks) == 1
+        assert len(chunks[0]) > 0
+
+    def test_stream_passes_session_id(self, pipeline, simple_reasoning):
+        artifacts = list(pipeline.stream(simple_reasoning, session_id="test-sess"))
+        assert artifacts[0].session_id == "test-sess"
+        assert artifacts[1].session_id == "test-sess"

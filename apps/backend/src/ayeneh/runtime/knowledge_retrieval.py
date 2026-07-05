@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -96,6 +97,9 @@ class KnowledgeRetrievalPipeline:
     Performs no reasoning — only gathers knowledge.
     """
 
+    _cache: OrderedDict[str, list[dict]] = OrderedDict()
+    _CACHE_MAX_SIZE = 100
+
     def __init__(self) -> None:
         self._db_path = "/home/hadi/ayeneh/Ayeneh/ayeneh.db"
 
@@ -105,6 +109,7 @@ class KnowledgeRetrievalPipeline:
         session_id: str = "",
         knowledge_version: str = "0.0.0",
         graph_version: str = "0.0.0",
+        conversation_history: list[dict[str, Any]] | None = None,
     ) -> RetrievalResult:
         """Execute the full Knowledge Retrieval pipeline."""
         start = time.monotonic()
@@ -113,7 +118,7 @@ class KnowledgeRetrievalPipeline:
         phase1 = self._phase_preparation(retrieval_plan)
 
         # Phase 2: Knowledge Source Execution
-        phase2 = self._phase_source_execution(retrieval_plan)
+        phase2 = self._phase_source_execution(retrieval_plan, conversation_history)
 
         # Phase 3: Evidence Aggregation
         phase3 = self._phase_evidence_aggregation(phase2)
@@ -126,6 +131,7 @@ class KnowledgeRetrievalPipeline:
         result = self._phase_publication(
             retrieval_plan, phase2, phase3, phase4,
             session_id, knowledge_version, graph_version, duration_ms,
+            conversation_history,
         )
 
         logger.debug(
@@ -154,7 +160,11 @@ class KnowledgeRetrievalPipeline:
     # Phase 2: Knowledge Source Execution (SPEC-23 §6)
     # ------------------------------------------------------------------
 
-    def _phase_source_execution(self, plan: Any) -> dict[str, Any]:
+    def _phase_source_execution(
+        self,
+        plan: Any,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """Execute retrieval tasks per the RetrievalPlan."""
         chunks = []
         profiles = []
@@ -166,6 +176,35 @@ class KnowledgeRetrievalPipeline:
         target_concepts = getattr(plan, 'target_concepts', [])
         target_books = getattr(plan, 'target_books', [])
         budget = getattr(plan, 'max_retrieval_budget', 20)
+
+        # Build cache key from sorted target_concepts + target_books
+        cache_key = "|".join(sorted(target_concepts) + sorted(target_books))
+
+        # Check cache
+        if cache_key and cache_key in self.__class__._cache:
+            self.__class__._cache.move_to_end(cache_key)
+            cached = self.__class__._cache[cache_key]
+            cache_hits = 1
+            return {
+                "chunks": cached,
+                "profiles": [],
+                "books": [],
+                "concepts": concepts_found,
+                "cache_hits": cache_hits,
+                "cache_misses": 0,
+            }
+
+        # Extract conversation keywords if history provided
+        conversation_keywords: list[str] = []
+        if conversation_history:
+            for msg in conversation_history[-5:]:
+                text = msg.get("content", "")
+                if text:
+                    words = [w for w in text.split() if len(w) > 3]
+                    conversation_keywords.extend(words[:3])
+
+        keywords = list(target_concepts[:5]) + conversation_keywords[:3]
+        keywords = [k for k in keywords if k][:5]
 
         try:
             import sqlite3
@@ -189,8 +228,7 @@ class KnowledgeRetrievalPipeline:
                         })
 
             # Fallback: retrieve by keywords if no chunks found
-            if not chunks and target_concepts:
-                keywords = target_concepts[:5]
+            if not chunks and keywords:
                 conditions = " OR ".join(["bc.content LIKE ?" for _ in keywords])
                 search_terms = [f"%{kw}%" for kw in keywords]
                 cursor.execute(
@@ -253,6 +291,14 @@ class KnowledgeRetrievalPipeline:
 
         except Exception as exc:
             logger.warning("retrieval_source_error", error=str(exc))
+
+        # Store in cache on miss
+        if cache_key and chunks:
+            cls = self.__class__
+            if len(cls._cache) >= cls._CACHE_MAX_SIZE:
+                cls._cache.popitem(last=False)
+            cls._cache[cache_key] = chunks
+            cache_misses = 1
 
         return {
             "chunks": chunks,
@@ -339,6 +385,7 @@ class KnowledgeRetrievalPipeline:
         knowledge_version: str,
         graph_version: str,
         duration_ms: float = 0.0,
+        conversation_history: list[dict[str, Any]] | None = None,
     ) -> RetrievalResult:
         """Publish exactly one immutable RetrievalResult."""
         chunks = aggregated.get("chunks", [])
@@ -355,6 +402,7 @@ class KnowledgeRetrievalPipeline:
             epistemic_profiles=profiles,
             books=books,
             citations=citations,
+            conversation_context=conversation_history or [],
             total_chunks=len(chunks),
             total_profiles=len(profiles),
             total_evidence=aggregated.get("total_evidence", 0),

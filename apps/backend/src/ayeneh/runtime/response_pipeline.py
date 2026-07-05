@@ -16,7 +16,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Callable, Iterator
 
 import structlog
 
@@ -57,6 +57,9 @@ class ResponseArtifact:
     # Validation
     validation_passed: bool = True
     validation_errors: list[str] = field(default_factory=list)
+
+    # Streaming
+    is_streaming: bool = False
 
     # Metadata
     duration_ms: float = 0.0
@@ -127,6 +130,56 @@ class ResponsePipeline:
         )
 
         return result
+
+    def stream(
+        self,
+        reasoning_result: Any,
+        query_analysis: Any = None,
+        session_id: str = "",
+        knowledge_version: str = "0.0.0",
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> Iterator[ResponseArtifact]:
+        """Stream response text chunks as they're generated.
+
+        Yields ResponseArtifact instances with ``is_streaming=True`` for
+        intermediate chunks and ``is_streaming=False`` for the final chunk.
+        """
+        artifact = self.execute(
+            reasoning_result,
+            query_analysis=query_analysis,
+            session_id=session_id,
+            knowledge_version=knowledge_version,
+        )
+
+        # Yield the full text as a single chunk with is_streaming=True
+        streaming = ResponseArtifact(
+            session_id=artifact.session_id,
+            request_id=artifact.request_id,
+            reasoning_id=artifact.reasoning_id,
+            knowledge_version=artifact.knowledge_version,
+            reasoning_version=artifact.reasoning_version,
+            provider_version=artifact.provider_version,
+            response_text=artifact.response_text,
+            citations=artifact.citations,
+            uncertainty_statements=artifact.uncertainty_statements,
+            follow_up_suggestions=artifact.follow_up_suggestions,
+            overall_confidence=artifact.overall_confidence,
+            confidence_components=artifact.confidence_components,
+            validation_passed=artifact.validation_passed,
+            validation_errors=artifact.validation_errors,
+            duration_ms=artifact.duration_ms,
+            provider_used=artifact.provider_used,
+            producer=artifact.producer,
+            is_streaming=True,
+        )
+
+        if on_chunk is not None:
+            on_chunk(artifact.response_text)
+
+        yield streaming
+
+        # Yield final artifact with is_streaming=False
+        yield artifact
 
     # ------------------------------------------------------------------
     # Phase 1: Preparation (SPEC-25 §5)

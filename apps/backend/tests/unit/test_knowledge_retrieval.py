@@ -178,3 +178,84 @@ class TestBackwardCompatibility:
         assert hasattr(result, 'total_profiles')
         assert hasattr(result, 'retrieval_confidence')
         assert hasattr(result, 'duration_ms')
+
+
+# ---------------------------------------------------------------------------
+# Conversation History (KRA-008)
+# ---------------------------------------------------------------------------
+
+
+class TestConversationHistory:
+    def test_conversation_history_param_accepted(self, pipeline, simple_plan):
+        history = [{"role": "user", "content": "Tell me about awareness"}]
+        result = pipeline.execute(simple_plan, conversation_history=history)
+        assert isinstance(result, RetrievalResult)
+
+    def test_conversation_context_stored(self, pipeline, simple_plan):
+        history = [{"role": "user", "content": "Tell me about awareness"}]
+        result = pipeline.execute(simple_plan, conversation_history=history)
+        assert result.conversation_context == history
+
+    def test_no_conversation_history(self, pipeline, simple_plan):
+        result = pipeline.execute(simple_plan)
+        assert result.conversation_context == []
+
+    def test_none_conversation_history(self, pipeline, simple_plan):
+        result = pipeline.execute(simple_plan, conversation_history=None)
+        assert result.conversation_context == []
+
+
+# ---------------------------------------------------------------------------
+# Cache Integration (KRA-009)
+# ---------------------------------------------------------------------------
+
+
+class TestCacheIntegration:
+    def setup_method(self):
+        KnowledgeRetrievalPipeline._cache.clear()
+
+    def test_cache_miss_on_first_query(self, pipeline, simple_plan):
+        result = pipeline.execute(simple_plan)
+        assert result.cache_misses == 1
+        assert result.cache_hits == 0
+
+    def test_cache_hit_on_second_query(self, pipeline, simple_plan):
+        pipeline.execute(simple_plan)
+        # Clear DB-related side effects but keep cache
+        result = pipeline.execute(simple_plan)
+        assert result.cache_hits == 1
+
+    def test_cache_max_size(self):
+        for i in range(105):
+            plan = RetrievalPlan(
+                target_concepts=[f"concept_{i}"],
+                target_books=[],
+                strategy="concept_first",
+                max_retrieval_budget=5,
+            )
+            KnowledgeRetrievalPipeline()._phase_source_execution(plan)
+        assert len(KnowledgeRetrievalPipeline._cache) <= KnowledgeRetrievalPipeline._CACHE_MAX_SIZE
+
+    def test_cache_lru_eviction(self):
+        for i in range(101):
+            plan = RetrievalPlan(
+                target_concepts=[f"concept_{i}"],
+                target_books=[],
+                strategy="concept_first",
+                max_retrieval_budget=5,
+            )
+            KnowledgeRetrievalPipeline()._phase_source_execution(plan)
+        # Oldest entry should have been evicted
+        first_key = "|".join(sorted(["concept_0"]))
+        assert first_key not in KnowledgeRetrievalPipeline._cache
+
+    def test_different_plans_get_separate_cache_entries(self, pipeline):
+        plan1 = RetrievalPlan(
+            target_concepts=["ConceptA"], target_books=[], strategy="concept_first", max_retrieval_budget=5,
+        )
+        plan2 = RetrievalPlan(
+            target_concepts=["ConceptB"], target_books=[], strategy="concept_first", max_retrieval_budget=5,
+        )
+        pipeline.execute(plan1)
+        pipeline.execute(plan2)
+        assert len(KnowledgeRetrievalPipeline._cache) == 2

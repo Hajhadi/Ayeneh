@@ -116,6 +116,7 @@ class AyenehPipeline:
         self._conversation_agent = None
         self._profile_generator = None
         self._concept_resolver = None
+        self._ai_router = None  # Set by container for AI Router integration
 
     def _init_engines(self) -> None:
         """Initialize all engines lazily."""
@@ -501,7 +502,7 @@ class AyenehPipeline:
             rea_trace_id = trace_registry.begin_stage("reasoning", request_id=session.session_id)
             rea_start = time.monotonic()
             from ayeneh.runtime.reasoning_pipeline import ReasoningPipeline
-            reasoning_pipe = ReasoningPipeline()
+            reasoning_pipe = ReasoningPipeline(ai_router=self._ai_router)
             reasoning_result = reasoning_pipe.execute(
                 retrieval_result=retrieval_result,
                 query_analysis=query_analysis,
