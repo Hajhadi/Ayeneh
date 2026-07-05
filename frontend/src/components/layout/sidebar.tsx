@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Chat', href: '/chat', icon: '💬' },
+  { name: 'COG Analysis', href: '/cog', icon: '🧬' },
   { name: 'Memories', href: '/memories', icon: '🧠' },
   { name: 'Patterns', href: '/patterns', icon: '🔄' },
   { name: 'Reflections', href: '/reflections', icon: '🪞' },

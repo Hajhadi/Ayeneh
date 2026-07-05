@@ -1,10 +1,19 @@
 import { api } from '@/lib/api-client';
 import type {
   Book,
+  CognitiveAnalysisResponse,
   Conversation,
   EpistemicProfile,
   ExecutionRecord,
   Job,
+  MemoConsolidation,
+  MemoEpisode,
+  MemoKGNode,
+  MemoKGEdge,
+  MemoKnowledgeGraph,
+  MemoSemantic,
+  MemoVersion,
+  MemoWorking,
   Memory,
   Message,
   PaginatedResponse,
@@ -134,6 +143,66 @@ export const dashboardApi = {
   status: () => api.get<RuntimeStatus>('/api/v1/runtime/status'),
   executionHistory: (limit?: number) =>
     runtimeApi.executions({ limit: limit || 20 }),
+};
+
+/* ── COG (Cognitive Architecture) ── */
+export const cogApi = {
+  analyze: (data: { user_id: string; messages: { role: string; content: string }[]; language?: string }) =>
+    api.post<CognitiveAnalysisResponse>('/api/v1/cog/analyze', data),
+  health: () => api.get<{ status: string; modules: number; version: string }>('/api/v1/cog/health'),
+};
+
+/* ── MEMO (Memory Architecture) ── */
+export const memoApi = {
+  health: () => api.get<{ status: string; module: string; timestamp: string }>('/api/v1/memo/health'),
+
+  // Episodes
+  createEpisode: (data: { title: string; summary?: string; episode_type?: string; state?: string; confidence?: number; importance?: number; outcome?: string }) =>
+    api.post<MemoEpisode>('/api/v1/memo/episodes', data),
+  listEpisodes: (params?: { state?: string; limit?: number }) =>
+    api.get<{ data: MemoEpisode[]; total: number }>('/api/v1/memo/episodes', params as Record<string, string>),
+
+  // Semantic memories
+  createSemantic: (data: { knowledge_statement: string; category?: string; confidence?: number; importance?: number; temporal_stability?: string }) =>
+    api.post<MemoSemantic>('/api/v1/memo/semantic', data),
+  listSemantic: (params?: { category?: string; limit?: number }) =>
+    api.get<{ data: MemoSemantic[]; total: number }>('/api/v1/memo/semantic', params as Record<string, string>),
+
+  // Working memory
+  createWorking: (data: { source_memory_id?: string; activation_reason?: string; activation_score?: number; priority_score?: number }) =>
+    api.post<MemoWorking>('/api/v1/memo/working', data),
+  listWorking: (params?: { status?: string; limit?: number }) =>
+    api.get<{ data: MemoWorking[]; total: number }>('/api/v1/memo/working', params as Record<string, string>),
+
+  // Knowledge graph
+  createKGNode: (data: { label: string; category: string; layer?: string; properties?: Record<string, unknown>; confidence?: number }) =>
+    api.post<MemoKGNode>('/api/v1/memo/graph/nodes', data),
+  createKGEdge: (data: { source_node_id: string; target_node_id: string; relationship?: string; weight?: number; confidence?: number }) =>
+    api.post<MemoKGEdge>('/api/v1/memo/graph/edges', data),
+  getKnowledgeGraph: (params?: { category?: string }) =>
+    api.get<MemoKnowledgeGraph>('/api/v1/memo/graph', params as Record<string, string>),
+
+  // Consolidation
+  consolidate: (data: { target_memory_id: string; evidence_summary?: string; confidence_before?: number; confidence_after?: number; decision?: string; consolidation_level?: string }) =>
+    api.post<MemoConsolidation>('/api/v1/memo/consolidate', data),
+  listConsolidations: (params?: { decision?: string; limit?: number }) =>
+    api.get<{ data: MemoConsolidation[]; total: number }>('/api/v1/memo/consolidate', params as Record<string, string>),
+
+  // Retrieval
+  retrieve: (data: { memory_type?: string; limit?: number }) =>
+    api.post<{ data: { id: string; memory_id: string; memory_type: string; final_score: number; strategy_used: string }[]; total: number }>('/api/v1/memo/retrieve', data),
+
+  // Ranking
+  rank: (data: { target_memory_id: string; task_profile?: string }) =>
+    api.post<{ id: string; target_memory_id: string; overall_score: number; task_profile: string }>('/api/v1/memo/rank', data),
+
+  // Forgetting
+  forget: (data: { affected_memory_ids?: string[]; compression_strategy?: string; reason?: string }) =>
+    api.post<{ id: string; recoverability_status: string }>('/api/v1/memo/forget', data),
+
+  // Versioning
+  listVersions: (params?: { memory_id?: string; limit?: number }) =>
+    api.get<{ data: MemoVersion[]; total: number }>('/api/v1/memo/versions', params as Record<string, string>),
 };
 
 /* ── Health ── */

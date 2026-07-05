@@ -238,3 +238,106 @@ export interface Toast {
   type: 'success' | 'error' | 'info' | 'warning';
   message: string;
 }
+
+/* ── COG (Cognitive Architecture) types ── */
+
+export interface CognitiveAnalysisResponse {
+  conversation_id: string;
+  evidence_count: number;
+  beliefs_extracted: number;
+  narratives_extracted: number;
+  values_extracted: number;
+  goals_extracted: number;
+  identity_components: number;
+  decisions: number;
+  patterns: number;
+  reflections: number;
+  meta_cognitive_objects: number;
+  awakening_level: number;
+  reality_calibration: number;
+}
+
+/* ── MEMO (Memory Architecture) types ── */
+
+export interface MemoEpisode {
+  id: string;
+  user_id: string;
+  title: string;
+  summary: string;
+  episode_type: string;
+  state: string;
+  confidence: number;
+  importance: number;
+  outcome: string | string[];
+  created_at?: string;
+}
+
+export interface MemoSemantic {
+  id: string;
+  user_id: string;
+  knowledge_statement: string;
+  category: string;
+  confidence: number;
+  importance: number;
+  temporal_stability: string;
+  lifecycle_state: string;
+  created_at?: string;
+}
+
+export interface MemoWorking {
+  id: string;
+  user_id: string;
+  source_memory_id: string;
+  activation_reason: string;
+  activation_score: number;
+  priority_score: number;
+  temporal_relevance: number;
+  estimated_lifetime_s: number;
+  status: string;
+  created_at?: string;
+}
+
+export interface MemoKGNode {
+  id: string;
+  user_id: string;
+  label: string;
+  category: string;
+  layer: string;
+  properties: Record<string, unknown>;
+  confidence: number;
+}
+
+export interface MemoKGEdge {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  relationship: string;
+  weight: number;
+  confidence: number;
+}
+
+export interface MemoKnowledgeGraph {
+  nodes: MemoKGNode[];
+  edges: MemoKGEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
+export interface MemoConsolidation {
+  id: string;
+  user_id: string;
+  target_memory_id: string;
+  decision: string;
+  confidence_before: number;
+  confidence_after: number;
+  created_at?: string;
+}
+
+export interface MemoVersion {
+  id: string;
+  target_memory_id: string;
+  version_number: number;
+  revision_type: string;
+  reason: string;
+  created_at?: string;
+}

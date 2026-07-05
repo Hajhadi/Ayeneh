@@ -10,6 +10,8 @@ import {
   libraryApi,
   jobsApi,
   dashboardApi,
+  cogApi,
+  memoApi,
 } from '@/lib/api';
 import type * as T from '@/types/api';
 
@@ -366,5 +368,97 @@ export function useExecutionHistory(limit = 20) {
   return useQuery({
     queryKey: ['execution-history', limit],
     queryFn: () => dashboardApi.executionHistory(limit),
+  });
+}
+
+/* ── COG hooks ── */
+export function useAnalyzeCOG() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { user_id: string; messages: { role: string; content: string }[]; language?: string }) =>
+      cogApi.analyze(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cog-analysis'] }),
+  });
+}
+
+export function useCOGHealth() {
+  return useQuery({
+    queryKey: ['cog-health'],
+    queryFn: cogApi.health,
+    refetchInterval: 30000,
+  });
+}
+
+/* ── MEMO hooks ── */
+export function useMemoEpisodes(limit = 20) {
+  return useQuery({
+    queryKey: ['memo-episodes', limit],
+    queryFn: () => memoApi.listEpisodes({ limit }),
+  });
+}
+
+export function useCreateMemoEpisode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { title: string; summary?: string; episode_type?: string; state?: string; confidence?: number; importance?: number; outcome?: string }) =>
+      memoApi.createEpisode(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memo-episodes'] }),
+  });
+}
+
+export function useMemoSemantic(limit = 20) {
+  return useQuery({
+    queryKey: ['memo-semantic', limit],
+    queryFn: () => memoApi.listSemantic({ limit }),
+  });
+}
+
+export function useCreateMemoSemantic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { knowledge_statement: string; category?: string; confidence?: number; importance?: number }) =>
+      memoApi.createSemantic(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memo-semantic'] }),
+  });
+}
+
+export function useMemoConsolidations(limit = 20) {
+  return useQuery({
+    queryKey: ['memo-consolidations', limit],
+    queryFn: () => memoApi.listConsolidations({ limit }),
+  });
+}
+
+export function useConsolidateMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { target_memory_id: string; evidence_summary?: string; confidence_before?: number; confidence_after?: number; decision?: string }) =>
+      memoApi.consolidate(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['memo-consolidations'] });
+      qc.invalidateQueries({ queryKey: ['memories'] });
+    },
+  });
+}
+
+export function useMemoVersions(limit = 20) {
+  return useQuery({
+    queryKey: ['memo-versions', limit],
+    queryFn: () => memoApi.listVersions({ limit }),
+  });
+}
+
+export function useKnowledgeGraph() {
+  return useQuery({
+    queryKey: ['memo-knowledge-graph'],
+    queryFn: () => memoApi.getKnowledgeGraph(),
+  });
+}
+
+export function useMemoHealth() {
+  return useQuery({
+    queryKey: ['memo-health'],
+    queryFn: memoApi.health,
+    refetchInterval: 30000,
   });
 }

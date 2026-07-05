@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMemories, useSearchMemories, useDeleteMemory, useArchiveMemory, useMemoryEvolution } from '@/hooks/use-api';
+import { useMemories, useSearchMemories, useDeleteMemory, useArchiveMemory, useMemoryEvolution, useConsolidateMemory, useMemoConsolidations } from '@/hooks/use-api';
 import { PageLayout } from '@/components/layout/page-layout';
 import { SkeletonList } from '@/components/common/skeleton';
 import { ErrorState } from '@/components/common/error-state';
@@ -11,11 +11,12 @@ import { SearchBar } from '@/components/common/search-bar';
 import { Button } from '@/components/ui/button';
 import type { Memory } from '@/types/api';
 
-function MemoryCard({ memory, onSelect, onDelete, onArchive }: {
+function MemoryCard({ memory, onSelect, onDelete, onArchive, onConsolidate }: {
   memory: Memory;
   onSelect: () => void;
   onDelete: () => void;
   onArchive: () => void;
+  onConsolidate: () => void;
 }) {
   const confColor = memory.confidence >= 0.8 ? 'text-green-600' :
                     memory.confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
@@ -50,6 +51,7 @@ function MemoryCard({ memory, onSelect, onDelete, onArchive }: {
       <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
         <span>{new Date(memory.created_at).toLocaleDateString()}</span>
         <div className="flex gap-1">
+          <button onClick={onConsolidate} className="hover:text-purple-600 px-1">Consolidate</button>
           <button onClick={onArchive} className="hover:text-yellow-600 px-1">Archive</button>
           <button onClick={onDelete} className="hover:text-red-600 px-1">Delete</button>
         </div>
@@ -137,13 +139,16 @@ export default function MemoriesPage() {
   const { data: searchData, isLoading: searchLoading } = useSearchMemories(search);
   const deleteMutation = useDeleteMemory();
   const archiveMutation = useArchiveMemory();
+  const consolidateMutation = useConsolidateMemory();
+  const { data: consolidationData } = useMemoConsolidations(5);
 
   const memories = search.length > 0 ? (searchData?.data || []) : (data?.data || []);
+  const consolidations = consolidationData?.data || [];
 
   return (
     <PageLayout
       title="Memories"
-      description="Your cognitive memories and insights"
+      description="Your cognitive memories and insights (MEMO)"
       actions={<Button onClick={() => refetch()} variant="outline" size="sm">Refresh</Button>}
     >
       <div className="mb-4">
@@ -166,9 +171,42 @@ export default function MemoriesPage() {
             onSelect={() => setSelected(m)}
             onDelete={() => setDeleteTarget(m)}
             onArchive={() => archiveMutation.mutate(m.id)}
+            onConsolidate={() =>
+              consolidateMutation.mutate({
+                target_memory_id: m.id,
+                confidence_before: m.confidence,
+                confidence_after: Math.min(1, m.confidence + 0.1),
+                decision: 'promote',
+              })
+            }
           />
         ))}
       </div>
+
+      {consolidations.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-3" style={{ color: '#fff' }}>Recent Consolidations</h2>
+          <div className="grid gap-2">
+            {consolidations.map((c) => (
+              <div key={c.id} className="rounded-lg border p-3 flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(22,22,30,0.8)' }}>
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    c.decision === 'promote' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {c.decision}
+                  </span>
+                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    Confidence: {(c.confidence_before * 100).toFixed(0)}% → {(c.confidence_after * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  {c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {selected && <MemoryDetail memory={selected} onClose={() => setSelected(null)} />}
 

@@ -94,6 +94,8 @@ class PipelineResult:
     runtime_trace: Any = None
     generated_response: Any = None
     trace_record: Any = None
+    cog_analysis: Any = None
+    memo_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -750,6 +752,112 @@ class AyenehPipeline:
                 "error": stage7.error,
                 "message": f"بررسی نهایی: {post_safety:.0%} ایمن",
             })
+
+            # Stage 14: COG Cognitive Analysis (after response)
+            cog_start = time.monotonic()
+            await _emit("cog_analysis", "running", {"message": "تحلیل شناختی مکالمه..."})
+            try:
+                from ayeneh.cog.conversation.understanding import ConversationUnderstandingEngine
+                from ayeneh.cog.evidence.extraction import EvidenceExtractionEngine
+                from ayeneh.cog.narrative.extraction import NarrativeExtractionEngine
+                from ayeneh.cog.belief.modeling import BeliefModelingEngine
+
+                all_messages = context.get("conversation_history", []) + [{"role": "user", "content": context.get("user_message", "")}]
+
+                conv_engine = ConversationUnderstandingEngine()
+                conv_result = conv_engine.process(
+                    conversation_id=session.session_id,
+                    messages=all_messages,
+                    language="en",
+                )
+
+                evidence_engine = EvidenceExtractionEngine()
+                evidence_result = evidence_engine.process(conv_result)
+                evidence_dicts = [vars(e) for e in evidence_result.evidence_objects]
+
+                narrative_engine = NarrativeExtractionEngine()
+                narrative_result = narrative_engine.process(evidence_dicts)
+                narrative_dicts = [vars(n) for n in narrative_result.narratives]
+
+                belief_engine = BeliefModelingEngine()
+                belief_result = belief_engine.process(evidence_dicts, narrative_dicts)
+
+                result.cog_analysis = {
+                    "evidence_count": evidence_result.total_extracted,
+                    "narrative_count": narrative_result.total_extracted,
+                    "belief_count": belief_result.total_extracted,
+                }
+
+                cog_duration_ms = (time.monotonic() - cog_start) * 1000
+                await _emit("cog_analysis", "done", {
+                    "confidence": 0.9,
+                    "duration_ms": cog_duration_ms,
+                    "message": f"شناسایی {evidence_result.total_extracted} شواهد، {narrative_result.total_extracted} روایت، {belief_result.total_extracted} باور",
+                })
+            except Exception as exc:
+                cog_duration_ms = (time.monotonic() - cog_start) * 1000
+                logger.debug("cog_analysis_failed", error=str(exc))
+                await _emit("cog_analysis", "done", {"confidence": 0.5, "duration_ms": cog_duration_ms, "message": "تحلیل شناختی انجام نشد"})
+
+            # Stage 15: MEMO Memory Consolidation (after response)
+            memo_start = time.monotonic()
+            await _emit("memory_consolidation", "running", {"message": "تحکیم حافظه..."})
+            try:
+                from ayeneh.memo.episodic.engine import EpisodicMemoryEngine
+                from ayeneh.memo.semantic.engine import SemanticMemoryEngine
+                from ayeneh.memo.working.engine import WorkingMemoryEngine
+                from ayeneh.memo.consolidation.engine import ConsolidationEngine
+                from ayeneh.memo.types import Observation
+
+                all_messages = context.get("conversation_history", []) + [{"role": "user", "content": context.get("user_message", "")}]
+
+                observations = [
+                    Observation(
+                        observation_id=f"{session.session_id}-{i}",
+                        content=m.get("content", ""),
+                        source=m.get("role", "user"),
+                    )
+                    for i, m in enumerate(all_messages) if m.get("content")
+                ]
+
+                episodic_engine = EpisodicMemoryEngine()
+                episodic_result = episodic_engine.run_pipeline(observations)
+
+                semantic_engine = SemanticMemoryEngine()
+                semantic_result = semantic_engine.run_pipeline(observations)
+
+                user_input = context.get("user_message", "")
+                working_engine = WorkingMemoryEngine()
+                working_result = working_engine.run_pipeline(
+                    user_input,
+                    recent_conversation=[m.get("content", "") for m in all_messages[-5:]],
+                )
+
+                working_items = [vars(o) for o in working_result.activated_objects]
+                episodes = [vars(e) for e in episodic_result.episodes]
+                consolidation_engine = ConsolidationEngine()
+                consolidation_result = consolidation_engine.run_pipeline(
+                    working_items,
+                    episodes=episodes,
+                )
+
+                result.memo_analysis = {
+                    "episodes": len(episodic_result.episodes),
+                    "semantic_memories": len(semantic_result.semantic_objects),
+                    "working_items": len(working_result.activated_objects),
+                    "consolidations": consolidation_result.promoted_count,
+                }
+
+                memo_duration_ms = (time.monotonic() - memo_start) * 1000
+                await _emit("memory_consolidation", "done", {
+                    "confidence": 0.9,
+                    "duration_ms": memo_duration_ms,
+                    "message": f"{len(episodic_result.episodes)} اپیزود، {len(semantic_result.semantic_objects)} حافظه معنایی، {consolidation_result.promoted_count} تحکیم",
+                })
+            except Exception as exc:
+                memo_duration_ms = (time.monotonic() - memo_start) * 1000
+                logger.debug("memo_consolidation_failed", error=str(exc))
+                await _emit("memory_consolidation", "done", {"confidence": 0.5, "duration_ms": memo_duration_ms, "message": "تحکیم حافظه انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))
