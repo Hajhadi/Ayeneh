@@ -265,8 +265,9 @@ def select_working_memory(
 class RankingEngine:
     """Orchestrates the full MEM-07 ranking pipeline."""
 
-    def __init__(self, default_capacity: int = 20) -> None:
+    def __init__(self, default_capacity: int = 20, ai_router: Any = None) -> None:
         self.default_capacity = default_capacity
+        self._ai_router = ai_router
 
     def rank(
         self,
@@ -276,6 +277,13 @@ class RankingEngine:
         """Run the full ranking pipeline over a set of retrieved memories."""
         ctx = context or RankingContext()
         logger.info('ranking_pipeline.start', memory_count=len(memories))
+
+        # Try LLM-assisted ranking first
+        llm_rankings = self._try_llm_ranking(memories, context)
+        if llm_rankings is not None:
+            llm_ids = {r.target_memory for r in llm_rankings}
+            if len(llm_ids & {m.identifier for m in memories}) > len(memories) * 0.5:
+                return select_working_memory(llm_rankings, self.default_capacity)
 
         # 1. Feature extraction
         scored: list[tuple[MemoryObject, DimensionScores]] = []
@@ -316,6 +324,61 @@ class RankingEngine:
             total=len(memories),
         )
         return selection
+
+    def _try_llm_ranking(self, memories: list[MemoryObject], context: RankingContext | None) -> list[RankingObject] | None:
+        """Attempt LLM-assisted ranking for complex memory sets."""
+        if self._ai_router is None or not memories:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+            mem_summaries = '; '.join(
+                f'{m.identifier}:{m.memory_type}:{m.lifecycle_status}' for m in memories[:10]
+            )
+            focus = context.current_cognitive_focus if context else ''
+            prompt = (
+                f'Rank the following memories for relevance to the current context: "{focus}"\n'
+                'Return a JSON list of objects with keys: memory_id, overall_score (0.0-1.0).\n\n'
+                f'Memories:\n{mem_summaries}'
+            )
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+            messages = [
+                {'role': 'system', 'content': 'You are a memory analysis assistant.'},
+                {'role': 'user', 'content': prompt},
+            ]
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            return self._parse_llm_ranking(content)
+        except Exception:
+            return None
+
+    def _parse_llm_ranking(self, content: str) -> list[RankingObject] | None:
+        """Parse LLM JSON response into RankingObjects."""
+        import json
+        try:
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start >= 0 and end > start:
+                data = json.loads(content[start:end])
+                rankings: list[RankingObject] = []
+                for item in data:
+                    rankings.append(RankingObject(
+                        ranking_identifier=f"rank_llm_{item.get('memory_id', 'unknown')}",
+                        target_memory=item.get('memory_id', ''),
+                        overall_score=min(1.0, max(0.0, item.get('overall_score', 0.5))),
+                    ))
+                return rankings
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
 
 
 def _apply_conflict_penalty(rank: RankingObject, conflict_ids: set[str]) -> RankingObject:

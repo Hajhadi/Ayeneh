@@ -488,3 +488,251 @@ class TestRetrievalScoring:
         # Filter by type
         episodic = [r for r in retrievals if r["memory_type"] == "episodic"]
         assert len(episodic) == 3  # indices 0, 2, 4
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator full pipeline (no DB)
+# ---------------------------------------------------------------------------
+
+class TestOrchestratorPipeline:
+    def test_process_returns_all_stage_results(self):
+        """The orchestrator should return results for every engine stage."""
+        from ayeneh.memo.pipeline.orchestrator import MEMOPipelineOrchestrator
+
+        orchestrator = MEMOPipelineOrchestrator()
+        messages = [
+            {'role': 'user', 'content': 'I learned about Python async patterns today'},
+            {'role': 'assistant', 'content': 'Great! Async programming is very useful'},
+            {'role': 'user', 'content': 'I also realized how decorators work'},
+        ]
+
+        results = orchestrator.process('test_user', messages)
+
+        # Should contain results for every stage
+        expected_keys = [
+            'episodic', 'semantic', 'working', 'consolidation',
+            'retrieval', 'ranking', 'forgetting', 'knowledge_graph',
+            'versioning', 'timings', 'pipeline_metadata',
+        ]
+        for key in expected_keys:
+            assert key in results, f"Missing key: {key}"
+
+        # Timing should be recorded
+        assert isinstance(results['timings'], dict)
+        assert len(results['timings']) >= 5  # at least 5 stages timed
+
+        # Metadata should have counts
+        meta = results['pipeline_metadata']
+        assert meta['user_id'] == 'test_user'
+        assert meta['message_count'] == 3
+
+    def test_process_with_empty_messages(self):
+        """Pipeline should handle empty message list gracefully."""
+        from ayeneh.memo.pipeline.orchestrator import MEMOPipelineOrchestrator
+
+        orchestrator = MEMOPipelineOrchestrator()
+        results = orchestrator.process('test_user', [])
+
+        assert 'episodic' in results
+        assert 'pipeline_metadata' in results
+        assert results['pipeline_metadata']['message_count'] == 0
+
+    def test_process_with_context(self):
+        """Pipeline should accept and pass through context."""
+        from ayeneh.memo.pipeline.orchestrator import MEMOPipelineOrchestrator
+
+        orchestrator = MEMOPipelineOrchestrator()
+        messages = [
+            {'role': 'user', 'content': 'What are my goals for this project?'},
+        ]
+        context = {'intent': 'recall', 'projects': ['ayeneh']}
+
+        results = orchestrator.process('test_user', messages, context)
+        assert 'pipeline_metadata' in results
+
+
+# ---------------------------------------------------------------------------
+# Multi-hop graph traversal
+# ---------------------------------------------------------------------------
+
+class TestMultiHopTraversal:
+    def test_traverse_graph_bfs(self):
+        """traverse_graph should return nodes reachable within max_hops."""
+        from ayeneh.memo.retrieval.adaptive import MultiHopRetriever
+
+        retriever = MultiHopRetriever(max_hops=3)
+        graph = {
+            'A': ['B', 'C'],
+            'B': ['D'],
+            'C': ['E'],
+            'D': ['F'],
+            'E': [],
+            'F': [],
+        }
+
+        result = retriever.traverse_graph('A', graph, max_hops=2)
+        assert 'A' in result
+        assert 'B' in result
+        assert 'C' in result
+        assert 'D' in result
+        assert 'E' in result
+        # F is 3 hops away, should NOT be included at max_hops=2
+        assert 'F' not in result
+
+    def test_traverse_graph_with_object(self):
+        """traverse_graph should work with objects that have a neighbors method."""
+        from ayeneh.memo.retrieval.adaptive import MultiHopRetriever
+
+        class MockGraphNode:
+            def __init__(self, nid):
+                self.node_id = nid
+
+        class MockGraph:
+            def __init__(self, adj):
+                self._adj = adj
+            def neighbors(self, node_id):
+                return [MockGraphNode(nid) for nid in self._adj.get(node_id, [])]
+
+        graph = MockGraph({'X': ['Y'], 'Y': ['Z'], 'Z': []})
+        retriever = MultiHopRetriever()
+        result = retriever.traverse_graph('X', graph, max_hops=2)
+        assert result == ['X', 'Y', 'Z']
+
+
+# ---------------------------------------------------------------------------
+# Forgetting eviction
+# ---------------------------------------------------------------------------
+
+class TestForgettingEviction:
+    def test_evict_dormant_memories(self):
+        """evict should identify memories with dormant/archived lifecycle states."""
+        from ayeneh.memo.forgetting.engine import ForgettingEngine
+        from ayeneh.memo.base import MemoryObject
+        from datetime import UTC, datetime
+
+        engine = ForgettingEngine()
+        now = datetime.now(UTC)
+
+        mem_active = MemoryObject(
+            identifier='mem_active',
+            memory_type='semantic',
+            creation_time=now,
+            confidence=0.8,
+            importance_score=0.7,
+            lifecycle_status='consolidated_memory',
+            last_updated=now,
+        )
+        mem_dormant = MemoryObject(
+            identifier='mem_dormant',
+            memory_type='semantic',
+            creation_time=now,
+            confidence=0.3,
+            importance_score=0.2,
+            lifecycle_status='dormant',
+            last_updated=now,
+        )
+        mem_archived = MemoryObject(
+            identifier='mem_archived',
+            memory_type='semantic',
+            creation_time=now,
+            confidence=0.1,
+            importance_score=0.1,
+            lifecycle_status='archived',
+            last_updated=now,
+        )
+
+        evicted = engine.evict('user1', [mem_active, mem_dormant, mem_archived])
+        assert 'mem_active' not in evicted
+        assert 'mem_dormant' in evicted
+        assert 'mem_archived' in evicted
+
+    def test_evict_empty_list(self):
+        """evict should handle empty memory list."""
+        from ayeneh.memo.forgetting.engine import ForgettingEngine
+
+        engine = ForgettingEngine()
+        evicted = engine.evict('user1', [])
+        assert evicted == []
+
+
+# ---------------------------------------------------------------------------
+# Working memory compression grouping
+# ---------------------------------------------------------------------------
+
+class TestWorkingMemoryCompressGroup:
+    def test_compress_group_by_source(self):
+        """compress_group should group items by source_memory."""
+        from ayeneh.memo.working.compression import WorkingMemoryCompressor
+        from ayeneh.memo.working.types import WorkingMemoryObject
+
+        compressor = WorkingMemoryCompressor()
+        items = [
+            WorkingMemoryObject(identifier='wm1', source_memory='episodic_memory', activation_reason='r1'),
+            WorkingMemoryObject(identifier='wm2', source_memory='episodic_memory', activation_reason='r2'),
+            WorkingMemoryObject(identifier='wm3', source_memory='semantic_personal_memory', activation_reason='r3'),
+        ]
+
+        result = compressor.compress_group(items)
+        assert result['original_count'] == 3
+        assert result['compressed_count'] == 2  # episodic group + semantic individual
+        assert result['compressed_count'] < result['original_count']
+
+        # The episodic group should be compressed
+        grouped = result['grouped']
+        compressed_groups = [g for g in grouped if isinstance(g, dict) and g.get('compressed')]
+        assert len(compressed_groups) == 1
+        assert compressed_groups[0]['source_type'] == 'episodic_memory'
+        assert compressed_groups[0]['item_count'] == 2
+
+    def test_compress_group_empty(self):
+        """compress_group should handle empty list."""
+        from ayeneh.memo.working.compression import WorkingMemoryCompressor
+
+        compressor = WorkingMemoryCompressor()
+        result = compressor.compress_group([])
+        assert result == {'grouped': [], 'original_count': 0, 'compressed_count': 0}
+
+
+# ---------------------------------------------------------------------------
+# Snapshot capture
+# ---------------------------------------------------------------------------
+
+class TestSnapshotCapture:
+    def test_capture_snapshot_counts(self):
+        """capture_snapshot should count active vs dormant memories."""
+        from ayeneh.memo.versioning.snapshot import SnapshotStore
+        from ayeneh.memo.base import MemoryObject
+        from datetime import UTC, datetime
+
+        store = SnapshotStore()
+        now = datetime.now(UTC)
+
+        memories = [
+            MemoryObject(
+                identifier='m1', memory_type='semantic', creation_time=now,
+                confidence=0.9, importance_score=0.8,
+                lifecycle_status='consolidated_memory', last_updated=now,
+            ),
+            MemoryObject(
+                identifier='m2', memory_type='semantic', creation_time=now,
+                confidence=0.3, importance_score=0.2,
+                lifecycle_status='dormant', last_updated=now,
+            ),
+            MemoryObject(
+                identifier='m3', memory_type='semantic', creation_time=now,
+                confidence=0.5, importance_score=0.5,
+                lifecycle_status='longitudinal_memory', last_updated=now,
+            ),
+        ]
+
+        result = store.capture_snapshot('user1', memories, beliefs=['b1'], narratives=['n1'])
+        assert result['user_id'] == 'user1'
+        assert result['memories'] == 3
+        assert result['active_memories'] == 2  # consolidated + longitudinal
+        assert result['dormant_memories'] == 1
+        assert result['beliefs'] == 1
+        assert result['narratives'] == 1
+        assert 'timestamp' in result
+
+        # Snapshot should be stored
+        assert len(store.list_snapshots()) >= 1

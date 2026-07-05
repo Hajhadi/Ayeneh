@@ -264,3 +264,24 @@ class ForgettingEngine:
             information_reduced=total_info_reduced,
             recoverable=True,
         )
+
+    def evict(self, user_id: str, memories: list[MemoryObject]) -> list[str]:
+        """Deactivate dormant and archived memories.
+
+        Iterates through *memories* and identifies those in terminal
+        lifecycle states (``archived`` or ``dormant``) that should be
+        deactivated. Returns a list of memory identifiers that were
+        flagged for eviction.
+
+        In a production system the caller would persist these evictions
+        via the repository; this method only identifies candidates.
+        """
+        evicted: list[str] = []
+        for mem in memories:
+            lifecycle = getattr(mem, 'lifecycle_status', '') or ''
+            lifecycle_state = getattr(mem, 'lifecycle_state', '') or ''
+            if lifecycle in ('archived', 'dormant') or lifecycle_state in ('archived', 'dormant'):
+                mem_id = getattr(mem, 'identifier', '')
+                if mem_id:
+                    evicted.append(mem_id)
+        return evicted

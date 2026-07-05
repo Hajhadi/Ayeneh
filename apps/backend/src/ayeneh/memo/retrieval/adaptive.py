@@ -112,6 +112,53 @@ class MultiHopRetriever:
 
         return all_items, multi_hop
 
+    def traverse_graph(
+        self,
+        start_id: str,
+        graph: Any,
+        max_hops: int = 3,
+    ) -> list[str]:
+        """BFS graph traversal for multi-hop retrieval.
+
+        Traverses a graph object (anything with a ``get_neighbors(node_id)`` or
+        ``neighbors(node_id)`` method) starting from *start_id* and collects
+        reachable node IDs up to *max_hops* hops away.
+
+        Falls back to treating *graph* as a ``dict[str, list[str]]``
+        adjacency list when the object does not expose a neighbor method.
+        """
+        visited: set[str] = set()
+        queue: list[tuple[str, int]] = [(start_id, 0)]
+        result_ids: list[str] = []
+
+        while queue:
+            node_id, depth = queue.pop(0)
+            if node_id in visited or depth > max_hops:
+                continue
+            visited.add(node_id)
+            result_ids.append(node_id)
+
+            # Resolve neighbours from the graph object
+            if hasattr(graph, 'get_neighbors'):
+                neighbors = graph.get_neighbors(node_id)
+            elif hasattr(graph, 'neighbors'):
+                raw = graph.neighbors(node_id)
+                # neighbours may return GraphNode objects or plain IDs
+                neighbors = [
+                    n.node_id if hasattr(n, 'node_id') else str(n)
+                    for n in raw
+                ]
+            elif isinstance(graph, dict):
+                neighbors = graph.get(node_id, [])
+            else:
+                neighbors = []
+
+            for neighbor_id in neighbors:
+                if neighbor_id not in visited:
+                    queue.append((neighbor_id, depth + 1))
+
+        return result_ids
+
 
 # ---------------------------------------------------------------------------
 # Adaptive retrieval manager

@@ -71,10 +71,12 @@ class SemanticMemoryEngine:
         repetition_threshold: int = DEFAULT_REPETITION_THRESHOLD,
         validation_min_episodes: int = DEFAULT_VALIDATION_MIN_EPISODES,
         consolidation_confidence_threshold: float = DEFAULT_CONSOLIDATION_CONFIDENCE_THRESHOLD,
+        ai_router: Any = None,
     ) -> None:
         self._repetition_threshold = repetition_threshold
         self._validation_min_episodes = validation_min_episodes
         self._consolidation_threshold = consolidation_confidence_threshold
+        self._ai_router = ai_router
         self._semantic_store: list[SemanticMemoryObject] = []
         self._knowledge_nodes: list[KnowledgeNode] = []
         self._knowledge_edges: list[KnowledgeEdge] = []
@@ -168,6 +170,27 @@ class SemanticMemoryEngine:
         evidence: list[EvidenceRecord],
     ) -> list[dict[str, Any]]:
         """Find patterns that appear repeatedly across evidence."""
+        # Try LLM-assisted extraction first for richer patterns
+        if len(evidence) >= self._repetition_threshold:
+            llm_patterns = self._try_llm_semantic_extraction(evidence)
+            if llm_patterns:
+                llm_repeated: list[dict[str, Any]] = []
+                for pat in llm_patterns:
+                    pattern_text = pat.get('pattern', '')
+                    if pattern_text:
+                        matching = [e for e in evidence if pattern_text.lower() in e.content.lower()]
+                        if len(matching) >= self._repetition_threshold:
+                            llm_repeated.append({
+                                'pattern': pattern_text,
+                                'count': len(matching),
+                                'evidence': tuple(r.evidence_id for r in matching),
+                                'sources': tuple({r.source for r in matching}),
+                                'first_observed': min(r.timestamp for r in matching),
+                                'last_observed': max(r.timestamp for r in matching),
+                            })
+                if llm_repeated:
+                    return llm_repeated
+
         # Group by content similarity (simple keyword-based)
         keyword_groups: dict[str, list[EvidenceRecord]] = {}
 
@@ -211,6 +234,50 @@ class SemanticMemoryEngine:
         }
         words = content.lower().split()
         return [w for w in words if len(w) > 3 and w.isalpha() and w not in stopwords]
+
+    def _try_llm_semantic_extraction(self, evidence: list[EvidenceRecord]) -> list[dict[str, Any]] | None:
+        """Attempt LLM-assisted semantic knowledge extraction."""
+        if self._ai_router is None:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+            evidence_summary = '; '.join(e.content[:80] for e in evidence[:10])
+            prompt = (
+                'Analyze the following evidence and extract semantic knowledge patterns. '
+                'Return a JSON list of objects with keys: pattern, category, confidence.\n\n'
+                f'Evidence:\n{evidence_summary}'
+            )
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+            messages = [
+                {'role': 'system', 'content': 'You are a memory analysis assistant.'},
+                {'role': 'user', 'content': prompt},
+            ]
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            return self._parse_llm_response(content)
+        except Exception:
+            return None
+
+    def _parse_llm_response(self, content: str) -> list[dict[str, Any]] | None:
+        """Parse LLM JSON response into structured data."""
+        import json
+        try:
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start >= 0 and end > start:
+                return json.loads(content[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
 
     # ------------------------------------------------------------------
     # Phase 3: Cross-Episode Validation

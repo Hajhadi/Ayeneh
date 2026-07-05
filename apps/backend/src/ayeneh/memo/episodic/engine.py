@@ -81,9 +81,11 @@ class EpisodicMemoryEngine:
         self,
         cluster_window_seconds: float = DEFAULT_CLUSTER_WINDOW_SECONDS,
         min_events_per_episode: int = DEFAULT_MIN_EVENTS_PER_EPISODE,
+        ai_router: Any = None,
     ) -> None:
         self._cluster_window = cluster_window_seconds
         self._min_events = min_events_per_episode
+        self._ai_router = ai_router
         self._boundary_detector = EpisodeBoundaryDetector()
         self._published_episodes: list[EpisodeObject] = []
         self._emotional_landscapes: dict[str, EmotionalLandscape] = {}
@@ -224,6 +226,119 @@ class EpisodicMemoryEngine:
             return 'reflection'
         return obs.observation_type or 'behavior'
 
+    def _try_llm_episode_detection(self, observations: list[Observation]) -> list[dict[str, Any]] | None:
+        """Attempt LLM-assisted episode detection for complex conversations."""
+        if self._ai_router is None:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+            content_summary = '; '.join(o.content[:100] for o in observations[:10])
+            prompt = (
+                'Analyze the following conversation observations and identify distinct episodes. '
+                'Return a JSON list of objects with keys: title, category, start_index, end_index.\n\n'
+                f'Observations:\n{content_summary}'
+            )
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+            messages = [
+                {'role': 'system', 'content': 'You are a memory analysis assistant.'},
+                {'role': 'user', 'content': prompt},
+            ]
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            return self._parse_llm_response(content)
+        except Exception:
+            return None
+
+    def _parse_llm_response(self, content: str) -> list[dict[str, Any]] | None:
+        """Parse LLM JSON response into structured episode data."""
+        import json
+        try:
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start >= 0 and end > start:
+                return json.loads(content[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
+
+    def _try_llm_episode_detection_from_events(self, events: list) -> list[dict[str, Any]] | None:
+        """Attempt LLM-assisted episode detection using extracted events."""
+        if self._ai_router is None or not events:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+            event_summaries = '; '.join(e.description[:80] for e in events[:10])
+            prompt = (
+                'Analyze the following events and identify distinct episodes. '
+                'Return a JSON list of objects with keys: title, category, start_index, end_index.\n\n'
+                f'Events:\n{event_summaries}'
+            )
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+            messages = [
+                {'role': 'system', 'content': 'You are a memory analysis assistant.'},
+                {'role': 'user', 'content': prompt},
+            ]
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            return self._parse_llm_response(content)
+        except Exception:
+            return None
+
+    def _build_candidates_from_llm(
+        self,
+        llm_data: list[dict[str, Any]],
+        clusters: list[list],
+    ) -> list[EpisodeObject]:
+        """Build EpisodeObject candidates from LLM-provided structure."""
+        import uuid as _uuid
+        candidates: list[EpisodeObject] = []
+        for item in llm_data:
+            start_idx = item.get('start_index', 0)
+            end_idx = item.get('end_index', len(clusters) - 1)
+            start_idx = max(0, min(start_idx, len(clusters) - 1))
+            end_idx = max(start_idx, min(end_idx, len(clusters) - 1))
+            flat_events = [e for c in clusters[start_idx:end_idx + 1] for e in c]
+            if not flat_events:
+                continue
+            start_time = flat_events[0].timestamp
+            end_time = flat_events[-1].timestamp
+            descriptions = [e.description for e in flat_events]
+            summary = '; '.join(descriptions[:5])
+            candidate = EpisodeObject(
+                identifier=f"ep_{_uuid.uuid4().hex[:12]}",
+                title=item.get('title', f'LLM Episode: {descriptions[0][:40]}'),
+                summary=summary,
+                start_time=start_time,
+                end_time=end_time,
+                estimated_duration=(end_time - start_time).total_seconds(),
+                state='candidate',
+                category=item.get('category', 'learning'),
+                confidence=min(1.0, len(flat_events) / 5.0),
+                supporting_evidence=tuple(
+                    eid for e in flat_events for eid in e.source_observations
+                ),
+            )
+            candidates.append(candidate)
+        return candidates
+
     # ------------------------------------------------------------------
     # Phase 3: Temporal Clustering
     # ------------------------------------------------------------------
@@ -254,6 +369,12 @@ class EpisodicMemoryEngine:
 
     def _detect_candidates(self, clusters: list[list[Event]]) -> list[EpisodeObject]:
         """Turn temporal clusters into episode candidates."""
+        if len(clusters) > 2:
+            all_events = [e for c in clusters for e in c]
+            llm_result = self._try_llm_episode_detection_from_events(all_events)
+            if llm_result:
+                return self._build_candidates_from_llm(llm_result, clusters)
+
         candidates: list[EpisodeObject] = []
 
         for i, cluster in enumerate(clusters):

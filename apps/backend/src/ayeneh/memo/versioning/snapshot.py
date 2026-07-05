@@ -96,6 +96,60 @@ class SnapshotStore:
             metadata={**snap.metadata, 'restored_from': snapshot_id},
         )
 
+    def capture_snapshot(
+        self,
+        user_id: str,
+        memories: list[Any],
+        beliefs: list[Any] | None = None,
+        narratives: list[Any] | None = None,
+        identity: list[Any] | None = None,
+    ) -> dict[str, Any]:
+        """Capture a complete cognitive state summary.
+
+        Analyses the provided memory objects and returns a dict describing
+        the state at this point in time, including counts broken down by
+        lifecycle status.
+        """
+        active_count = 0
+        dormant_count = 0
+        for m in memories:
+            state = getattr(m, 'lifecycle_state', '') or getattr(m, 'lifecycle_status', '') or ''
+            if state in ('consolidated_memory', 'longitudinal_memory', 'consolidated', 'longitudinal'):
+                active_count += 1
+            elif state in ('dormant', 'archived'):
+                dormant_count += 1
+
+        snapshot: dict[str, Any] = {
+            'user_id': user_id,
+            'timestamp': datetime.now(UTC).isoformat(),
+            'memories': len(memories),
+            'beliefs': len(beliefs or []),
+            'narratives': len(narratives or []),
+            'identity_components': len(identity or []),
+            'active_memories': active_count,
+            'dormant_memories': dormant_count,
+        }
+
+        # Persist as a CognitiveSnapshot
+        versions: dict[str, int] = {}
+        for i, m in enumerate(memories):
+            mid = getattr(m, 'identifier', f'mem_{i}')
+            versions[mid] = 1
+
+        cognitive_snap = CognitiveSnapshot(
+            snapshot_id=f'capture_{int(datetime.now(UTC).timestamp())}_{user_id}',
+            memory_versions=versions,
+            knowledge_graph_version=1,
+            active_goals=tuple(),
+            active_projects=tuple(),
+            identity_state={},
+            belief_state={},
+            metadata={'capture_summary': snapshot},
+        )
+        self.save(cognitive_snap)
+
+        return snapshot
+
 
 @dataclass(frozen=True)
 class SnapshotDiff:

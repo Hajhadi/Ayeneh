@@ -77,10 +77,12 @@ class RetrievalEngine:
         max_retrieval_size: int = DEFAULT_MAX_RETRIEVAL_SIZE,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
         ranking_weights: RankingWeights | None = None,
+        ai_router: Any = None,
     ) -> None:
         self._max_size = max_retrieval_size
         self._confidence_threshold = confidence_threshold
         self._weights = ranking_weights or DEFAULT_RANKING_WEIGHTS
+        self._ai_router = ai_router
         self._semantic_store: dict[str, dict[str, Any]] = {}
         self._episode_store: dict[str, dict[str, Any]] = {}
         self._knowledge_graph: dict[str, list[str]] = {}
@@ -374,6 +376,76 @@ class RetrievalEngine:
 
         return validated
 
+    def _try_llm_relevance_scoring(self, items: list[RetrievedItem], query: str) -> list[RetrievedItem] | None:
+        """Attempt LLM-assisted relevance scoring for retrieved items."""
+        if self._ai_router is None or not items:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+            item_summaries = '; '.join(
+                f'{item.memory_id}:{item.content[:50]}' for item in items[:10]
+            )
+            prompt = (
+                f'Score the relevance of each memory to the query: "{query}"\n'
+                'Return a JSON list of objects with keys: memory_id, relevance_score (0.0-1.0).\n\n'
+                f'Memories:\n{item_summaries}'
+            )
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+            messages = [
+                {'role': 'system', 'content': 'You are a memory analysis assistant.'},
+                {'role': 'user', 'content': prompt},
+            ]
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            scores = self._parse_llm_scores(content)
+            if scores is None:
+                return None
+            score_map = {s['memory_id']: s.get('relevance_score', 0.5) for s in scores}
+            enhanced: list[RetrievedItem] = []
+            for item in items:
+                if item.memory_id in score_map:
+                    llm_score = score_map[item.memory_id]
+                    blended = item.relevance_score * 0.6 + llm_score * 0.4
+                    enhanced.append(RetrievedItem(
+                        memory_id=item.memory_id,
+                        memory_type=item.memory_type,
+                        content=item.content,
+                        relevance_score=blended,
+                        recency_score=item.recency_score,
+                        importance_score=item.importance_score,
+                        confidence_score=item.confidence_score,
+                        final_score=item.final_score,
+                        retrieval_path=item.retrieval_path,
+                        supporting_evidence=item.supporting_evidence,
+                        explainability_metadata=item.explainability_metadata,
+                    ))
+                else:
+                    enhanced.append(item)
+            return enhanced
+        except Exception:
+            return None
+
+    def _parse_llm_scores(self, content: str) -> list[dict[str, Any]] | None:
+        """Parse LLM JSON response for relevance scores."""
+        import json
+        try:
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start >= 0 and end > start:
+                return json.loads(content[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
+
     # ------------------------------------------------------------------
     # Phase 9: Ranking
     # ------------------------------------------------------------------
@@ -385,6 +457,11 @@ class RetrievalEngine:
     ) -> list[RetrievedItem]:
         """Rank retrieved items by composite score."""
         weights = self._weights.normalize()
+
+        # Try LLM-assisted scoring
+        llm_enhanced = self._try_llm_relevance_scoring(items, request.conversation_context)
+        if llm_enhanced is not None:
+            items = llm_enhanced
 
         ranked: list[RetrievedItem] = []
         for item in items:

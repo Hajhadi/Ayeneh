@@ -403,3 +403,39 @@ class WorkingMemoryCompressor:
     def get_compression_history(self) -> list[CompressionResult]:
         """Return the history of compression operations."""
         return list(self._compression_history)
+
+    def compress_group(self, items: list[WorkingMemoryObject]) -> dict[str, Any]:
+        """Group related working memory items by source type.
+
+        Returns a dict with:
+        - ``grouped``: list of grouped summaries or individual items
+        - ``original_count``: number of items before grouping
+        - ``compressed_count``: number of groups after compression
+        """
+        if not items:
+            return {'grouped': [], 'original_count': 0, 'compressed_count': 0}
+
+        # Group by source_memory (the source type field)
+        groups: dict[str, list[WorkingMemoryObject]] = {}
+        for item in items:
+            source = getattr(item, 'source_memory', 'unknown')
+            groups.setdefault(source, []).append(item)
+
+        compressed: list[Any] = []
+        for source, group in groups.items():
+            if len(group) > 1:
+                summary = {
+                    'source_type': source,
+                    'item_count': len(group),
+                    'items': [getattr(i, 'identifier', str(i)) for i in group],
+                    'compressed': True,
+                }
+                compressed.append(summary)
+            else:
+                compressed.append(group[0] if group else None)
+
+        return {
+            'grouped': compressed,
+            'original_count': len(items),
+            'compressed_count': len(compressed),
+        }
