@@ -146,6 +146,9 @@ class Container:
     goal_metrics: Any = field(default=None, init=False)
     goal_events: Any = field(default=None, init=False)
 
+    # COG cognitive architecture
+    _cog_pipeline: Any = field(default=None, init=False)
+
     def __post_init__(self) -> None:
         self.settings = get_settings()
 
@@ -378,6 +381,14 @@ class Container:
                 return UnitOfWork(sf)
             return factory
         return None
+
+    @property
+    def cog_pipeline(self) -> Any:
+        """Lazily construct and cache the COG cognitive pipeline orchestrator."""
+        if self._cog_pipeline is None:
+            from ayeneh.cog.pipeline.orchestrator import CognitivePipelineOrchestrator
+            self._cog_pipeline = CognitivePipelineOrchestrator()
+        return self._cog_pipeline
 
     def _register_diagnostics(self) -> None:
         """Register subsystem health checks with DiagnosticsCollector."""

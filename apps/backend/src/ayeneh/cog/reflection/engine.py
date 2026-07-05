@@ -44,11 +44,12 @@ class ReflectionEngine:
         5. Blind Spot Detection — identify structures absent from awareness
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ai_router: Any = None) -> None:
         self._reflections: dict[str, ReflectionObject] = {}
         self._insights: dict[str, InsightObject] = {}
         self._blind_spot_detector = BlindSpotDetector()
         self._awakening_dynamics = AwakeningDynamics()
+        self._ai_router = ai_router
 
     # ------------------------------------------------------------------
     # Public API
@@ -95,8 +96,12 @@ class ReflectionEngine:
         # Phase 2 — Longitudinal Analysis
         longitudinal = self._longitudinal_analysis(evidence, patterns)
 
-        # Phase 3 — Candidate Generation
-        candidates = self._generate_candidates(relationships, longitudinal)
+        # Phase 3 — Candidate Generation (try LLM first if available)
+        llm_candidates = self._try_llm_reflection_generation(relationships, longitudinal)
+        if llm_candidates:
+            candidates = llm_candidates
+        else:
+            candidates = self._generate_candidates(relationships, longitudinal)
 
         # Phase 4 — Validation
         validated = self._validate(candidates)
@@ -236,6 +241,91 @@ class ReflectionEngine:
             'total_patterns': total_patterns,
             'category_counts': category_counts,
         }
+
+    # ------------------------------------------------------------------
+    # LLM integration
+    # ------------------------------------------------------------------
+
+    def _try_llm_reflection_generation(
+        self,
+        relationships: list[dict[str, Any]],
+        longitudinal: dict[str, Any],
+    ) -> dict[str, ReflectionObject] | None:
+        """Attempt LLM-based reflection generation. Returns None on failure."""
+        if not self._ai_router:
+            return None
+        try:
+            import asyncio
+            import uuid as _uuid
+            from ayeneh.ai_router.types import AITask, AITaskType
+
+            rel_descriptions = []
+            for rel in relationships[:10]:
+                rel_type = rel.get('type', 'unknown')
+                strength = rel.get('strength', 0.0)
+                rel_descriptions.append(
+                    f"- type: {rel_type}, strength: {strength:.2f}, "
+                    f"evidence_ids: {rel.get('evidence_ids', ())}"
+                )
+
+            prompt = (
+                "Generate cognitive reflection statements based on the following "
+                "relationships and longitudinal analysis.\n\n"
+                "Relationships:\n"
+                + ("\n".join(rel_descriptions) if rel_descriptions else "(none)")
+                + f"\n\nLongitudinal coverage: {longitudinal.get('temporal_coverage', 'minimal')}"
+                + f"\nBreadth: {longitudinal.get('breadth', 0.0):.2f}"
+                + f"\nDepth: {longitudinal.get('depth', 0.0):.2f}"
+                + "\n\nFor each reflection, provide:\n"
+                "- statement: a descriptive observation\n"
+                "- scope: one of project, identity, life_trajectory\n"
+                "- confidence: 0.0-1.0\n\n"
+                "Respond as a JSON list of objects with keys: statement, scope, confidence."
+            )
+            messages = [
+                {"role": "system", "content": "You are a cognitive reflection assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                return None
+
+            import json
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start == -1 or end <= 0:
+                return None
+            items = json.loads(content[start:end])
+            candidates: dict[str, ReflectionObject] = {}
+            for item in items:
+                statement = item.get('statement', '')
+                scope = item.get('scope', 'project')
+                confidence = float(item.get('confidence', 0.5))
+                if not statement or scope not in REFLECTION_SCOPES:
+                    continue
+                ref = ReflectionObject(
+                    identifier=str(_uuid.uuid4()),
+                    reflection_statement=statement,
+                    scope=scope,
+                    temporal_coverage=longitudinal.get('temporal_coverage', ''),
+                    confidence=min(confidence, 1.0),
+                    granularity=_infer_granularity(longitudinal),
+                )
+                candidates[ref.identifier] = ref
+            return candidates if candidates else None
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------
     # Phase 3: Candidate Generation

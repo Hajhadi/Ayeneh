@@ -208,6 +208,36 @@ class TestBeliefModelingEngine:
         result = belief_engine.process(evidence)
         assert result.total_extracted > 0
 
+    def test_default_ai_router_is_none(self):
+        """Engine works without ai_router (default None)."""
+        engine = BeliefModelingEngine()
+        assert engine._ai_router is None
+        evidence = [{'identifier': 'ev-1', 'type': 'self_report', 'text': 'I believe in growth.'}]
+        result = engine.process(evidence)
+        assert isinstance(result, BeliefModelingResult)
+
+    def test_with_ai_router_parameter(self):
+        """Engine accepts ai_router parameter."""
+        mock_router = object()
+        engine = BeliefModelingEngine(ai_router=mock_router)
+        assert engine._ai_router is mock_router
+
+    def test_llm_fallback_on_running_loop(self):
+        """When event loop is running, LLM path returns None and falls back to rule-based."""
+        import asyncio
+
+        async def _run():
+            engine = BeliefModelingEngine(ai_router=object())
+            evidence = [
+                {'identifier': 'ev-1', 'type': 'self_report', 'text': 'I believe in hard work.'},
+                {'identifier': 'ev-2', 'type': 'self_report', 'text': 'I think that honesty matters.'},
+            ]
+            result = engine.process(evidence)
+            assert isinstance(result, BeliefModelingResult)
+            return result
+
+        asyncio.run(_run())
+
 
 # ---------------------------------------------------------------------------
 # BeliefNetworkBuilder tests

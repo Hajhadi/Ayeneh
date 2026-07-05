@@ -256,6 +256,35 @@ class TestReflectionEngine:
         engine.process(sample_evidence)
         assert len(engine._reflections) >= 0
 
+    def test_default_ai_router_is_none(self):
+        """Engine works without ai_router (default None)."""
+        eng = ReflectionEngine()
+        assert eng._ai_router is None
+        result = eng.process([{'id': 'ev-1', 'text': 'test', 'category': 'self_report'}])
+        assert isinstance(result, ReflectionResult)
+
+    def test_with_ai_router_parameter(self):
+        """Engine accepts ai_router parameter."""
+        mock_router = object()
+        eng = ReflectionEngine(ai_router=mock_router)
+        assert eng._ai_router is mock_router
+
+    def test_llm_fallback_on_running_loop(self):
+        """When event loop is running, LLM path returns None and falls back to rule-based."""
+        import asyncio
+
+        async def _run():
+            eng = ReflectionEngine(ai_router=object())
+            evidence = [
+                {'id': 'ev-1', 'text': 'I procrastinate', 'category': 'behavioral_report'},
+                {'id': 'ev-2', 'text': 'I procrastinate under stress', 'category': 'behavioral_report'},
+            ]
+            result = eng.process(evidence)
+            assert isinstance(result, ReflectionResult)
+            return result
+
+        asyncio.run(_run())
+
 
 # ---------------------------------------------------------------------------
 # BlindSpotDetector tests

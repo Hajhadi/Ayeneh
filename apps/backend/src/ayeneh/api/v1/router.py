@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from ayeneh.api.v1.endpoints import (
     blind_spots,
+    cog,
     conversations,
     diagnostics,
     health,
@@ -32,5 +33,6 @@ api_router.include_router(blind_spots.router, prefix="/blind-spots", tags=["blin
 api_router.include_router(library.router, prefix="/library", tags=["library"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(runtime.router, prefix="/runtime", tags=["runtime"])
+api_router.include_router(cog.router, tags=["cognitive"])
 api_router.include_router(goal_api.router, prefix="/goals", tags=["goals"])
 api_router.include_router(product_api.router, prefix="/products", tags=["products"])

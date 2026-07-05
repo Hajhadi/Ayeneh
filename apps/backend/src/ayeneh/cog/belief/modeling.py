@@ -78,8 +78,9 @@ class BeliefModelingEngine:
         4. Build Network — inter-belief relationships
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ai_router: Any = None) -> None:
         self._beliefs: dict[str, BeliefObject] = {}
+        self._ai_router = ai_router
 
     # ------------------------------------------------------------------
     # Public API
@@ -218,6 +219,78 @@ class BeliefModelingEngine:
         return validated
 
     # ------------------------------------------------------------------
+    # LLM integration
+    # ------------------------------------------------------------------
+
+    def _try_llm_belief_assessment(
+        self,
+        validated: list[BeliefObject],
+        evidence_objects: list[dict[str, Any]],
+    ) -> dict[str, dict[str, float]] | None:
+        """Attempt LLM-based belief metric assessment. Returns None on failure."""
+        if not self._ai_router:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+
+            belief_descriptions = []
+            for b in validated[:10]:
+                belief_descriptions.append(
+                    f"- [{b.identifier}] \"{b.belief_statement}\" (category: {b.category})"
+                )
+            evidence_texts = []
+            for ev in evidence_objects[:15]:
+                text = ev.get('text', ev.get('original_text', ''))
+                if text:
+                    evidence_texts.append(f"- {text}")
+
+            if not belief_descriptions:
+                return None
+
+            prompt = (
+                "Assess the following beliefs based on the evidence. "
+                "For each belief, provide confidence, strength, stability, "
+                "and influence scores (0.0-1.0).\n\n"
+                "Beliefs:\n"
+                + "\n".join(belief_descriptions)
+                + "\n\nEvidence:\n"
+                + ("\n".join(evidence_texts) if evidence_texts else "(no evidence)")
+                + "\n\nRespond as a JSON object mapping belief IDs to objects "
+                "with keys: confidence, strength, stability, influence."
+            )
+            messages = [
+                {"role": "system", "content": "You are a cognitive belief analysis assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                return None
+
+            import json
+            start = content.find('{')
+            end = content.rfind('}') + 1
+            if start == -1 or end <= 0:
+                return None
+            metrics = json.loads(content[start:end])
+            if not isinstance(metrics, dict):
+                return None
+            return metrics
+        except Exception:
+            return None
+
+    # ------------------------------------------------------------------
     # Phase 3: Compute metrics
     # ------------------------------------------------------------------
 
@@ -226,14 +299,27 @@ class BeliefModelingEngine:
         validated: list[BeliefObject],
         evidence_objects: list[dict[str, Any]],
     ) -> list[BeliefObject]:
-        """Compute strength, stability, influence, and confidence."""
+        """Compute strength, stability, influence, and confidence.
+
+        If an AI router is available, attempts LLM-based assessment first,
+        falling back to rule-based on failure.
+        """
+        llm_metrics = self._try_llm_belief_assessment(validated, evidence_objects)
+
         scored: list[BeliefObject] = []
         for b in validated:
-            evidence_count = self._count_supporting_evidence(b, evidence_objects)
-            confidence = min(1.0, evidence_count * 0.2)
-            strength = min(1.0, evidence_count * 0.15 + 0.1)
-            stability = min(1.0, evidence_count * 0.1)
-            influence = min(1.0, evidence_count * 0.12)
+            if llm_metrics and b.identifier in llm_metrics:
+                m = llm_metrics[b.identifier]
+                confidence = min(1.0, max(0.0, float(m.get('confidence', 0.0))))
+                strength = min(1.0, max(0.0, float(m.get('strength', 0.0))))
+                stability = min(1.0, max(0.0, float(m.get('stability', 0.0))))
+                influence = min(1.0, max(0.0, float(m.get('influence', 0.0))))
+            else:
+                evidence_count = self._count_supporting_evidence(b, evidence_objects)
+                confidence = min(1.0, evidence_count * 0.2)
+                strength = min(1.0, evidence_count * 0.15 + 0.1)
+                stability = min(1.0, evidence_count * 0.1)
+                influence = min(1.0, evidence_count * 0.12)
 
             scored.append(BeliefObject(
                 identifier=b.identifier,

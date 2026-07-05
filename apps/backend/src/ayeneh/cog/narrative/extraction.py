@@ -77,8 +77,9 @@ class NarrativeExtractionEngine:
     behavior, and identity construction.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ai_router: Any = None) -> None:
         self._narratives: dict[str, NarrativeObject] = {}
+        self._ai_router = ai_router
 
     def process(
         self,
@@ -159,6 +160,114 @@ class NarrativeExtractionEngine:
         return matched if matched else ['self']
 
     # ------------------------------------------------------------------
+    # LLM integration
+    # ------------------------------------------------------------------
+
+    def _try_llm_narrative_detection(
+        self,
+        patterns: dict[str, list[Any]],
+        evidence_objects: list[Any],
+    ) -> list[NarrativeObject] | None:
+        """Attempt LLM-based narrative detection. Returns None on failure."""
+        if not self._ai_router:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+
+            evidence_texts = []
+            for ev in evidence_objects[:20]:
+                text = (
+                    getattr(ev, 'original_text', '')
+                    or getattr(ev, 'normalized_text', '')
+                    or ''
+                ).strip()
+                if text:
+                    evidence_texts.append(text)
+
+            if not evidence_texts:
+                return None
+
+            prompt = (
+                "Analyze the following evidence texts and identify recurring "
+                "narrative patterns. For each narrative, provide:\n"
+                "- category (e.g., self, identity, growth, career, family)\n"
+                "- template (e.g., growth, failure, hero, victim)\n"
+                "- statement\n"
+                "- confidence (0.0-1.0)\n\n"
+                "Evidence:\n"
+                + "\n".join(f"- {t}" for t in evidence_texts)
+                + "\n\nRespond as a JSON list of objects with keys: "
+                "category, template, statement, confidence."
+            )
+            messages = [
+                {"role": "system", "content": "You are a cognitive narrative analysis assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                return None
+
+            return self._parse_llm_narratives(content, evidence_objects)
+        except Exception:
+            return None
+
+    def _parse_llm_narratives(
+        self,
+        content: str,
+        evidence_objects: list[Any],
+    ) -> list[NarrativeObject]:
+        """Parse LLM response into NarrativeObject list."""
+        import json
+
+        candidates: list[NarrativeObject] = []
+        try:
+            # Try to extract JSON from the response
+            start = content.find('[')
+            end = content.rfind(']') + 1
+            if start == -1 or end <= 0:
+                return []
+            items = json.loads(content[start:end])
+            for i, item in enumerate(items, 1):
+                category = item.get('category', 'self')
+                if category not in NARRATIVE_CATEGORIES:
+                    category = 'self'
+                template = item.get('template', '')
+                statement = item.get('statement', '')
+                confidence = float(item.get('confidence', 0.5))
+                if not statement:
+                    continue
+                evidence_ids = tuple(
+                    getattr(ev, 'identifier', f'ev-{j}')
+                    for j, ev in enumerate(evidence_objects[:5])
+                )
+                candidates.append(NarrativeObject(
+                    identifier=f'narr-llm-{i:04d}',
+                    narrative_type=category,
+                    title=f'{category.replace("_", " ").title()} Narrative (LLM)',
+                    summary=statement,
+                    supporting_evidence=evidence_ids,
+                    confidence=min(confidence, 1.0),
+                    influence_score=0.0,
+                    template=template,
+                    lifecycle_state='candidate',
+                ))
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return []
+        return candidates
+
+    # ------------------------------------------------------------------
     # Phase 2: Candidate detection
     # ------------------------------------------------------------------
 
@@ -167,7 +276,16 @@ class NarrativeExtractionEngine:
         patterns: dict[str, list[Any]],
         evidence_objects: list[Any],
     ) -> list[NarrativeObject]:
-        """Create NarrativeObject candidates from detected patterns."""
+        """Create NarrativeObject candidates from detected patterns.
+
+        If an AI router is available and text is complex, attempts LLM-based
+        detection first, falling back to rule-based on failure.
+        """
+        if self._ai_router and len(evidence_objects) >= 5:
+            llm_candidates = self._try_llm_narrative_detection(patterns, evidence_objects)
+            if llm_candidates:
+                return llm_candidates
+
         candidates: list[NarrativeObject] = []
         counter = 0
 

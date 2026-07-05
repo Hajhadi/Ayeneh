@@ -244,6 +244,36 @@ class TestRealityCalibrationEngine:
         result = calibration_engine.process(sample_evidence)
         assert isinstance(result.processing_timestamp, datetime)
 
+    def test_default_ai_router_is_none(self):
+        """Engine works without ai_router (default None)."""
+        engine = RealityCalibrationEngine()
+        assert engine._ai_router is None
+        evidence = [{'identifier': 'ev-1', 'type': 'observation', 'text': 'test event'}]
+        result = engine.process(evidence)
+        assert isinstance(result, CalibrationResult)
+
+    def test_with_ai_router_parameter(self):
+        """Engine accepts ai_router parameter."""
+        mock_router = object()
+        engine = RealityCalibrationEngine(ai_router=mock_router)
+        assert engine._ai_router is mock_router
+
+    def test_llm_fallback_on_running_loop(self):
+        """When event loop is running, LLM path returns None and falls back to rule-based."""
+        import asyncio
+
+        async def _run():
+            engine = RealityCalibrationEngine(ai_router=object())
+            evidence = [
+                {'identifier': 'ev-1', 'type': 'observation', 'text': 'The person arrived late'},
+                {'identifier': 'ev-2', 'type': 'self_report', 'text': 'I always try my best'},
+            ]
+            result = engine.process(evidence)
+            assert isinstance(result, CalibrationResult)
+            return result
+
+        asyncio.run(_run())
+
 
 # ---------------------------------------------------------------------------
 # CognitiveFusionDetector tests

@@ -63,11 +63,12 @@ class RealityCalibrationEngine:
         6. Compute awakening index
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ai_router: Any = None) -> None:
         self._calibrations: dict[str, CalibrationObject] = {}
         self._mental_stories: dict[str, MentalStoryObject] = {}
         self._fusion_detector = CognitiveFusionDetector()
         self._narrative_fusion_detector = NarrativeFusionDetector()
+        self._ai_router = ai_router
 
     # ------------------------------------------------------------------
     # Public API
@@ -123,6 +124,86 @@ class RealityCalibrationEngine:
         return result
 
     # ------------------------------------------------------------------
+    # LLM integration
+    # ------------------------------------------------------------------
+
+    def _try_llm_calibration(
+        self,
+        evidence: list[dict[str, Any]],
+        narratives: list[dict[str, Any]],
+        beliefs: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]] | None:
+        """Attempt LLM-based calibration assessment. Returns None on failure."""
+        if not self._ai_router:
+            return None
+        try:
+            import asyncio
+            from ayeneh.ai_router.types import AITask, AITaskType
+
+            evidence_texts = [
+                f"- [{ev.get('identifier', '')}] ({ev.get('type', 'unknown')}) {ev.get('text', '')}"
+                for ev in evidence[:10]
+                if ev.get('text')
+            ]
+            narr_texts = [
+                f"- [{n.get('identifier', '')}] {n.get('text', n.get('summary', ''))}"
+                for n in narratives[:5]
+                if n.get('text') or n.get('summary')
+            ]
+            belief_texts = [
+                f"- [{b.get('identifier', '')}] {b.get('belief_statement', '')}"
+                for b in beliefs[:5]
+                if b.get('belief_statement')
+            ]
+
+            prompt = (
+                "Calibrate the following evidence against available narratives and beliefs. "
+                "For each evidence item, provide:\n"
+                "- confidence: 0.0-1.0\n"
+                "- evidence_quality: 0.0-1.0\n"
+                "- calibration_status: one of well_anchored, moderately_anchored, "
+                "weakly_anchored, highly_speculative, contradicted\n"
+                "- identity_involvement: 0.0-1.0\n\n"
+                "Evidence:\n"
+                + ("\n".join(evidence_texts) if evidence_texts else "(none)")
+                + "\n\nNarratives:\n"
+                + ("\n".join(narr_texts) if narr_texts else "(none)")
+                + "\n\nBeliefs:\n"
+                + ("\n".join(belief_texts) if belief_texts else "(none)")
+                + "\n\nRespond as a JSON object mapping evidence IDs to assessment objects."
+            )
+            messages = [
+                {"role": "system", "content": "You are a cognitive reality calibration assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            task = AITask(
+                task_type=AITaskType.CONVERSATION_GENERATION,
+                content=prompt,
+                max_tokens=1024,
+                temperature=0.3,
+            )
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return None
+            result = loop.run_until_complete(self._ai_router.chat(task, messages))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                return None
+
+            import json
+            start = content.find('{')
+            end = content.rfind('}') + 1
+            if start == -1 or end <= 0:
+                return None
+            assessments = json.loads(content[start:end])
+            if not isinstance(assessments, dict):
+                return None
+            return assessments
+        except Exception:
+            return None
+
+    # ------------------------------------------------------------------
     # Phase 1: Calibrate evidence
     # ------------------------------------------------------------------
 
@@ -133,7 +214,13 @@ class RealityCalibrationEngine:
         beliefs: list[dict[str, Any]],
         identity: list[dict[str, Any]],
     ) -> list[CalibrationObject]:
-        """Calibrate each evidence item against available context."""
+        """Calibrate each evidence item against available context.
+
+        If an AI router is available, attempts LLM-based calibration first,
+        falling back to rule-based on failure.
+        """
+        llm_assessments = self._try_llm_calibration(evidence, narratives, beliefs)
+
         calibrations: list[CalibrationObject] = []
 
         for ev in evidence:
@@ -149,11 +236,21 @@ class RealityCalibrationEngine:
             belief_refs = self._find_related_items(ev, beliefs, key='belief_statement')
 
             identity_score = self._compute_identity_involvement(ev, identity)
-            confidence = self._compute_calibration_confidence(
-                evidence_level, len(available), identity_score,
-            )
-            evidence_quality = self._compute_evidence_quality(evidence_level, len(available))
-            status = self._determine_calibration_status(confidence, evidence_level)
+
+            if llm_assessments and eid in llm_assessments:
+                a = llm_assessments[eid]
+                confidence = min(1.0, max(0.0, float(a.get('confidence', 0.0))))
+                evidence_quality = min(1.0, max(0.0, float(a.get('evidence_quality', 0.0))))
+                status = a.get('calibration_status', 'weakly_anchored')
+                if status not in CALIBRATION_STATES:
+                    status = 'weakly_anchored'
+                identity_score = min(1.0, max(0.0, float(a.get('identity_involvement', identity_score))))
+            else:
+                confidence = self._compute_calibration_confidence(
+                    evidence_level, len(available), identity_score,
+                )
+                evidence_quality = self._compute_evidence_quality(evidence_level, len(available))
+                status = self._determine_calibration_status(confidence, evidence_level)
 
             obj = CalibrationObject(
                 identifier=eid,

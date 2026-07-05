@@ -333,6 +333,33 @@ class TestNarrativeExtractionEngine:
         result = narrative_engine.process(sample_evidence_list)
         assert isinstance(result.processing_timestamp, datetime)
 
+    def test_default_ai_router_is_none(self):
+        """Engine works without ai_router (default None)."""
+        engine = NarrativeExtractionEngine()
+        assert engine._ai_router is None
+        evidence = [_make_evidence(f'ev-{i}', 'self_report', f'Text {i}') for i in range(3)]
+        result = engine.process(evidence)
+        assert isinstance(result, NarrativeExtractionResult)
+
+    def test_with_ai_router_parameter(self):
+        """Engine accepts ai_router parameter."""
+        mock_router = object()
+        engine = NarrativeExtractionEngine(ai_router=mock_router)
+        assert engine._ai_router is mock_router
+
+    def test_llm_fallback_on_running_loop(self):
+        """When event loop is running, LLM path returns None and falls back to rule-based."""
+        import asyncio
+
+        async def _run():
+            engine = NarrativeExtractionEngine(ai_router=object())
+            evidence = [_make_evidence(f'ev-{i}', 'self_report', f'Text {i}') for i in range(6)]
+            result = engine.process(evidence)
+            assert isinstance(result, NarrativeExtractionResult)
+            return result
+
+        asyncio.run(_run())
+
 
 # ---------------------------------------------------------------------------
 # NarrativeNetworkBuilder tests
