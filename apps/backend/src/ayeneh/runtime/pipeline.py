@@ -97,6 +97,7 @@ class PipelineResult:
     cog_analysis: Any = None
     inference_analysis: Any = None
     memo_analysis: Any = None
+    dlg_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -904,6 +905,76 @@ class AyenehPipeline:
                 memo_duration_ms = (time.monotonic() - memo_start) * 1000
                 logger.debug("memo_consolidation_failed", error=str(exc))
                 await _emit("memory_consolidation", "done", {"confidence": 0.5, "duration_ms": memo_duration_ms, "message": "تحکیم حافظه انجام نشد"})
+
+            # Stage 16: DLG Dialogue Management
+            dlg_start = time.monotonic()
+            await _emit("dialogue_management", "running", {"message": "مدیریت گفتگو..."})
+            try:
+                from ayeneh.dlg.manager.engine import DialogueManager
+                from ayeneh.dlg.state.engine import ConversationStateMachine
+                from ayeneh.dlg.context.engine import ContextBuilder
+                from ayeneh.dlg.reflection.engine import ReflectionTimingEngine
+                from ayeneh.dlg.questioning.engine import QuestionGenerationEngine
+
+                user_msg = context.get('user_message', '')
+                conv_id = context.get('conversation_id', session.session_id)
+
+                # Build context (DLG-03)
+                ctx_builder = ContextBuilder()
+                ctx_obj = ctx_builder.build(
+                    user_input=user_msg,
+                    conversation_id=conv_id,
+                    session_id=session.session_id,
+                    user_id=context.get('user_id', ''),
+                )
+
+                # Manage dialogue (DLG-01)
+                dlg_manager = DialogueManager()
+                dlg_result = dlg_manager.process(user_msg, {
+                    'conversation_id': conv_id,
+                    'session_id': session.session_id,
+                })
+
+                # Update state (DLG-02)
+                state_machine = ConversationStateMachine()
+                state_result = state_machine.process(user_msg, {
+                    'session_id': session.session_id,
+                    'user_id': context.get('user_id', ''),
+                })
+
+                # Detect reflection opportunities (DLG-04)
+                reflection_engine = ReflectionTimingEngine()
+                reflection_result = reflection_engine.process(
+                    {'engagement_level': 0.5, 'depth': 0},
+                    conversation_history=[],
+                )
+
+                # Generate questions (DLG-05)
+                question_engine = QuestionGenerationEngine()
+                question_result = question_engine.process(
+                    {'engagement_level': 0.5, 'current_intent': {'confidence': 0.5}},
+                    conversation_history=[],
+                )
+
+                result.dlg_analysis = {
+                    'intent': dlg_result.detected_intent.intent_type,
+                    'mode': dlg_result.response_strategy.mode,
+                    'state': state_result.current_state_type.state_type,
+                    'reflections': 1 if reflection_result else 0,
+                    'questions': 1 if question_result else 0,
+                    'confidence': dlg_result.confidence.overall,
+                }
+
+                dlg_duration_ms = (time.monotonic() - dlg_start) * 1000
+                await _emit("dialogue_management", "done", {
+                    "confidence": dlg_result.confidence.overall,
+                    "duration_ms": dlg_duration_ms,
+                    "message": f"حالت: {state_result.current_state_type.state_type}، {dlg_result.detected_intent.intent_type}",
+                })
+            except Exception as exc:
+                dlg_duration_ms = (time.monotonic() - dlg_start) * 1000
+                logger.debug("dialogue_management_failed", error=str(exc))
+                await _emit("dialogue_management", "done", {"confidence": 0.5, "duration_ms": dlg_duration_ms, "message": "مدیریت گفتگو انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))

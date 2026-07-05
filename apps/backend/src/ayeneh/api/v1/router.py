@@ -9,6 +9,7 @@ from ayeneh.api.v1.endpoints import (
     cog,
     conversations,
     diagnostics,
+    dlg,
     health,
     inf,
     library,
@@ -40,3 +41,4 @@ api_router.include_router(cog.router, tags=["cognitive"])
 api_router.include_router(inf.router, prefix="/inf", tags=["inference"])
 api_router.include_router(goal_api.router, prefix="/goals", tags=["goals"])
 api_router.include_router(product_api.router, prefix="/products", tags=["products"])
+api_router.include_router(dlg.router, prefix="/dlg", tags=["dialogue"])
