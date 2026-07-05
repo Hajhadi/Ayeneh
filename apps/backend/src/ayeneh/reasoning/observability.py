@@ -5,10 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ayeneh.observability.base import MetricsPublisher
+
 
 @dataclass
-class ReasoningMetrics:
+class ReasoningMetrics(MetricsPublisher):
     """Tracks reasoning engine metrics for observability."""
+
+    def __post_init__(self) -> None:
+        MetricsPublisher.__init__(self, "reasoning")
 
     total_sessions: int = 0
     total_evidence_evaluated: int = 0

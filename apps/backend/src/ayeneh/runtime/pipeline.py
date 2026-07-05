@@ -88,7 +88,10 @@ class PipelineResult:
     session_id: str = ""
     runtime_state: str = ""
     retrieval_plan: Any = None
+    reasoning_result: Any = None
+    response_artifact: Any = None
     integrated_knowledge: Any = None
+    runtime_trace: Any = None
     generated_response: Any = None
     trace_record: Any = None
 
@@ -173,6 +176,10 @@ class AyenehPipeline:
         trace_recorder = TraceRecorder(session_id=session.session_id)
         runtime_metrics = RuntimeMetrics(session_id=session.session_id)
 
+        # Structured trace registry per SPEC-01A §36-37
+        from ayeneh.observability.trace_registry import TraceRegistry
+        trace_registry = TraceRegistry()
+
         async def _emit(name: str, status: str, details: dict[str, Any] | None = None) -> None:
             if on_stage:
                 try:
@@ -235,9 +242,17 @@ class AyenehPipeline:
                 "details": {"local_model": local_model, "cloud_model": cloud_model, "selected_model": selected_model, "routing_reason": routing_reason},
             })
 
-            # Stage 4: Query Analysis
-            await _emit("query_analysis", "running", {"message": "استخراج مفاهیم، موضوعات و کتاب‌ها..."})
-            query_analysis = self._query_analysis(context.get("user_message", ""))
+            # Stage 4: Query Analysis (SPEC-21 compliant pipeline)
+            await _emit("query_analysis", "running", {"message": "تحلیل سؤال (۹ مرحله‌ای)..."})
+            qu_trace_id = trace_registry.begin_stage("query_understanding", request_id=session.session_id)
+            qu_start = time.monotonic()
+            from ayeneh.runtime.query_understanding import QueryUnderstandingPipeline
+            qu_pipeline = QueryUnderstandingPipeline()
+            query_analysis = qu_pipeline.execute(
+                user_message=context.get("user_message", ""),
+                conversation_history=context.get("conversation_history", []),
+                session_id=session.session_id,
+            )
             concepts = query_analysis.concepts
             topics = query_analysis.topics
             book_refs = query_analysis.book_references
@@ -245,6 +260,25 @@ class AyenehPipeline:
 
             # Store full QueryAnalysis in stage output
             result.query_analysis = query_analysis
+
+            # Record QueryTrace
+            from ayeneh.observability.trace_types import QueryTrace, ExecutionTiming
+            qu_duration_ms = (time.monotonic() - qu_start) * 1000
+            trace_registry.end_stage("query_understanding", QueryTrace(
+                request_id=session.session_id,
+                execution_id=qu_trace_id,
+                raw_input=context.get("user_message", "")[:200],
+                language=tuple(query_analysis.languages),
+                intent=query_analysis.intent,
+                question_type=query_analysis.question_type,
+                concepts=tuple(query_analysis.concepts),
+                entities=tuple(query_analysis.entities),
+                complexity_level=query_analysis.complexity,
+                capabilities=tuple(query_analysis.required_reasoning.split(",") if query_analysis.required_reasoning else []),
+                reasoning_depth=query_analysis.required_reasoning,
+                retrieval_depth=query_analysis.scope,
+                timing=ExecutionTiming(wall_ms=qu_duration_ms),
+            ))
 
             await _emit("query_analysis", "done", {
                 "confidence": 0.85,
@@ -267,9 +301,11 @@ class AyenehPipeline:
 
             # Stage 4.5: Retrieval Planning (SPEC-01A §74)
             await _emit("retrieval_planning", "running", {"message": "برنامه‌ریزی بازیابی دانش..."})
-            from ayeneh.runtime.retrieval_planning import RetrievalPlanner
-            retrieval_planner = RetrievalPlanner()
-            retrieval_plan = retrieval_planner.plan(
+            rp_trace_id = trace_registry.begin_stage("retrieval_planning", request_id=session.session_id)
+            rp_start = time.monotonic()
+            from ayeneh.runtime.retrieval_planning import RetrievalPlanningPipeline
+            retrieval_pipeline = RetrievalPlanningPipeline()
+            retrieval_plan = retrieval_pipeline.execute(
                 query_analysis,
                 session_id=session.session_id,
                 knowledge_version=session.knowledge_version,
@@ -277,6 +313,18 @@ class AyenehPipeline:
             )
             result.retrieval_plan = retrieval_plan
             rt_context.register_artifact("RetrievalPlan", "retrieval_planning")
+
+            # Record RetrievalPlanningTrace
+            from ayeneh.observability.trace_types import RetrievalPlanningTrace
+            rp_duration_ms = (time.monotonic() - rp_start) * 1000
+            trace_registry.end_stage("retrieval_planning", RetrievalPlanningTrace(
+                request_id=session.session_id,
+                execution_id=rp_trace_id,
+                plan_id=getattr(retrieval_plan, 'plan_id', ''),
+                strategy=retrieval_plan.strategy,
+                budget=retrieval_plan.max_retrieval_budget,
+                timing=ExecutionTiming(wall_ms=rp_duration_ms),
+            ))
             await _emit("retrieval_planning", "done", {
                 "confidence": 0.9,
                 "duration_ms": 0.1,
@@ -290,165 +338,112 @@ class AyenehPipeline:
                 },
             })
 
-            # Stage 5: Knowledge Graph + Epistemic Profiles
+            # Stage 5: Knowledge Retrieval (SPEC-23 compliant pipeline)
             await _emit("knowledge_graph", "running", {"message": "جستجوی دانش و بارگذاری پروفایل‌های شناختی..."})
-            stage2 = self._stage_knowledge_retrieval(context, query_analysis=query_analysis)
-            result.stages.append(stage2)
-            result.knowledge_chunks = stage2.output_data.get("chunks", [])
-            chunk_count = len(result.knowledge_chunks)
-            books_found = list(set(c.get("book_title", "") for c in result.knowledge_chunks))
+            kr_trace_id = trace_registry.begin_stage("knowledge_retrieval", request_id=session.session_id)
+            kr_start = time.monotonic()
+            from ayeneh.runtime.knowledge_retrieval import KnowledgeRetrievalPipeline
+            kr_pipeline = KnowledgeRetrievalPipeline()
+            retrieval_result = kr_pipeline.execute(
+                retrieval_plan=retrieval_plan,
+                session_id=session.session_id,
+                knowledge_version=session.knowledge_version,
+                graph_version=session.graph_version,
+            )
+            result.knowledge_chunks = retrieval_result.chunks
+            chunk_count = retrieval_result.total_chunks
+            books_found = list(set(b.get("title", "") for b in retrieval_result.books))
+            epistemic_profiles = retrieval_result.epistemic_profiles
 
-            # Load epistemic profiles for found books, generate missing ones
-            epistemic_profiles = []
+            # Generate missing epistemic profiles
             generated_count = 0
             try:
-                import sqlite3
                 from ayeneh.domain.knowledge_epistemics.generator.types import DocumentContext
 
+                existing_profile_ids = set(p.get("book_id") for p in epistemic_profiles)
+                book_ids_in_chunks = list(set(c.get("book_id") for c in result.knowledge_chunks if c.get("book_id")))
+
+                import sqlite3
                 conn = sqlite3.connect("/home/hadi/ayeneh/Ayeneh/ayeneh.db")
                 cursor = conn.cursor()
 
-                # Get book_ids from chunks
-                book_ids_in_chunks = list(set(
-                    c.get("book_id") for c in result.knowledge_chunks if c.get("book_id")
-                ))
-
-                # Also get book_ids by matching titles
-                if not book_ids_in_chunks and books_found:
-                    for btitle in books_found:
+                for bid in book_ids_in_chunks:
+                    if bid not in existing_profile_ids:
                         cursor.execute(
-                            "SELECT id FROM books WHERE title = ? AND deleted_at IS NULL",
-                            (btitle,),
+                            "SELECT title, author FROM books WHERE id = ? AND deleted_at IS NULL", (bid,),
                         )
-                        row = cursor.fetchone()
-                        if row:
-                            book_ids_in_chunks.append(row[0])
-
-                # Load existing profiles
-                if book_ids_in_chunks:
-                    placeholders = ",".join(["?" for _ in book_ids_in_chunks])
-                    cursor.execute(
-                        f"SELECT book_id, tradition, framework, discipline, primary_topics, "
-                        f"evidence_level, reasoning_style, authority "
-                        f"FROM epistemic_profiles WHERE book_id IN ({placeholders}) AND deleted_at IS NULL",
-                        book_ids_in_chunks,
-                    )
-                    existing_profile_ids = set()
-                    for row in cursor.fetchall():
+                        book_row = cursor.fetchone()
+                        if not book_row:
+                            continue
+                        cursor.execute(
+                            "SELECT content, token_count FROM book_chunks "
+                            "WHERE book_id = ? AND deleted_at IS NULL ORDER BY sequence_number", (bid,),
+                        )
+                        book_chunks = cursor.fetchall()
+                        if not book_chunks:
+                            continue
+                        chapters = [{"content": ct[0][:2000], "token_count": ct[1]} for ct in book_chunks]
+                        doc_context = DocumentContext(
+                            document_id=bid, title=book_row[0] or "Unknown",
+                            author=book_row[1] or "Unknown", language="en",
+                            chapters=chapters, total_chunks=len(chapters),
+                        )
+                        profile, _ = self._profile_generator.generate(
+                            doc_context, bid, "00000000-0000-0000-0000-000000000001"
+                        )
+                        now = __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()
+                        fw_val = profile.framework.value if hasattr(profile.framework, "value") else str(profile.framework)
+                        dm_val = profile.discipline.value if hasattr(profile.discipline, "value") else str(profile.discipline)
+                        ev_val = profile.evidence_level.value if hasattr(profile.evidence_level, "value") else str(profile.evidence_level)
+                        rs_val = profile.reasoning_style.value if hasattr(profile.reasoning_style, "value") else str(profile.reasoning_style)
+                        au_val = profile.authority.value if hasattr(profile.authority, "value") else str(profile.authority)
+                        cursor.execute(
+                            "INSERT INTO epistemic_profiles "
+                            "(id, book_id, user_id, source, tradition, framework, discipline, "
+                            "primary_topics, secondary_topics, supported_questions, unsupported_questions, "
+                            "evidence_level, reasoning_style, authority, claim_types, applicability, "
+                            "limitations, scope_boundary, citation_policy, confidence_policy, "
+                            "conflict_policy, priority_hints, source_reliability, historical_period, "
+                            "language, translation_metadata, created_at, updated_at, deleted_at) "
+                            "VALUES (?, ?, ?, 'book', ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, "
+                            "?, ?, ?, 'standard', 'negotiate', '[]', ?, 'modern', 'en', '', ?, ?, NULL)",
+                            (
+                                str(profile.id), bid, "00000000-0000-0000-0000-000000000001",
+                                profile.tradition, fw_val, dm_val,
+                                json.dumps(profile.primary_topics or []),
+                                json.dumps(profile.secondary_topics or []),
+                                ev_val, rs_val, au_val,
+                                json.dumps([v.value if hasattr(v, "value") else str(v) for v in (profile.claim_types or [])]),
+                                json.dumps({"contexts": (profile.applicability.contexts if profile.applicability else []),
+                                            "conditions": (profile.applicability.conditions if profile.applicability else []),
+                                            "contraindications": (profile.applicability.contraindications if profile.applicability else [])}),
+                                json.dumps([{"description": l.description, "severity": l.severity} for l in (profile.limitations or [])]),
+                                json.dumps({"included": (profile.scope_boundary.included_topics if profile.scope_boundary else []),
+                                            "excluded": (profile.scope_boundary.excluded_topics if profile.scope_boundary else [])}),
+                                json.dumps({"required": (profile.citation_policy.required if profile.citation_policy else True),
+                                            "format": (profile.citation_policy.format if profile.citation_policy else "inline")}),
+                                json.dumps({"score": (profile.source_reliability.score if profile.source_reliability else 0.5),
+                                            "basis": (profile.source_reliability.basis if profile.source_reliability else "mixed")}),
+                                now, now,
+                            ),
+                        )
+                        conn.commit()
                         epistemic_profiles.append({
-                            "book_id": row[0],
-                            "tradition": row[1],
-                            "framework": row[2],
-                            "discipline": row[3],
-                            "topics": row[4],
-                            "evidence_level": row[5],
-                            "reasoning_style": row[6],
-                            "authority": row[7],
+                            "book_id": bid, "tradition": profile.tradition,
+                            "framework": fw_val, "discipline": dm_val,
+                            "topics": json.dumps(profile.primary_topics or []),
+                            "evidence_level": ev_val, "reasoning_style": rs_val, "authority": au_val,
                         })
-                        existing_profile_ids.add(row[0])
-
-                    # Generate profiles for books missing them
-                    for bid in book_ids_in_chunks:
-                        if bid not in existing_profile_ids:
-                            # Get book info
-                            cursor.execute(
-                                "SELECT title, author FROM books WHERE id = ? AND deleted_at IS NULL",
-                                (bid,),
-                            )
-                            book_row = cursor.fetchone()
-                            if not book_row:
-                                continue
-
-                            # Get chunks for this book as chapters
-                            cursor.execute(
-                                "SELECT content, token_count FROM book_chunks "
-                                "WHERE book_id = ? AND deleted_at IS NULL ORDER BY sequence_number",
-                                (bid,),
-                            )
-                            book_chunks = cursor.fetchall()
-                            if not book_chunks:
-                                continue
-
-                            chapters = [
-                                {"content": ct[0][:2000], "token_count": ct[1]}
-                                for ct in book_chunks
-                            ]
-
-                            doc_context = DocumentContext(
-                                document_id=bid,
-                                title=book_row[0] or "Unknown",
-                                author=book_row[1] or "Unknown",
-                                language="en",
-                                chapters=chapters,
-                                total_chunks=len(chapters),
-                            )
-
-                            profile, metadata = self._profile_generator.generate(
-                                doc_context, bid, "00000000-0000-0000-0000-000000000001"
-                            )
-
-                            # Persist to DB
-                            now = __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()
-                            fw_val = profile.framework.value if hasattr(profile.framework, "value") else str(profile.framework)
-                            dm_val = profile.discipline.value if hasattr(profile.discipline, "value") else str(profile.discipline)
-                            ev_val = profile.evidence_level.value if hasattr(profile.evidence_level, "value") else str(profile.evidence_level)
-                            rs_val = profile.reasoning_style.value if hasattr(profile.reasoning_style, "value") else str(profile.reasoning_style)
-                            au_val = profile.authority.value if hasattr(profile.authority, "value") else str(profile.authority)
-
-                            cursor.execute(
-                                "INSERT INTO epistemic_profiles "
-                                "(id, book_id, user_id, source, tradition, framework, discipline, "
-                                "primary_topics, secondary_topics, supported_questions, unsupported_questions, "
-                                "evidence_level, reasoning_style, authority, claim_types, applicability, "
-                                "limitations, scope_boundary, citation_policy, confidence_policy, "
-                                "conflict_policy, priority_hints, source_reliability, historical_period, "
-                                "language, translation_metadata, created_at, updated_at, deleted_at) "
-                                "VALUES (?, ?, ?, 'book', ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, "
-                                "?, ?, ?, 'standard', 'negotiate', '[]', ?, 'modern', 'en', '', ?, ?, NULL)",
-                                (
-                                    str(profile.id), bid,
-                                    "00000000-0000-0000-0000-000000000001",
-                                    profile.tradition, fw_val, dm_val,
-                                    json.dumps(profile.primary_topics or []),
-                                    json.dumps(profile.secondary_topics or []),
-                                    ev_val, rs_val, au_val,
-                                    json.dumps([v.value if hasattr(v, "value") else str(v) for v in (profile.claim_types or [])]),
-                                    json.dumps({"contexts": (profile.applicability.contexts if profile.applicability else []),
-                                                "conditions": (profile.applicability.conditions if profile.applicability else []),
-                                                "contraindications": (profile.applicability.contraindications if profile.applicability else [])}),
-                                    json.dumps([{"description": l.description, "severity": l.severity} for l in (profile.limitations or [])]),
-                                    json.dumps({"included": (profile.scope_boundary.included_topics if profile.scope_boundary else []),
-                                                "excluded": (profile.scope_boundary.excluded_topics if profile.scope_boundary else [])}),
-                                    json.dumps({"required": (profile.citation_policy.required if profile.citation_policy else True),
-                                                "format": (profile.citation_policy.format if profile.citation_policy else "inline")}),
-                                    json.dumps({"score": (profile.source_reliability.score if profile.source_reliability else 0.5),
-                                                "basis": (profile.source_reliability.basis if profile.source_reliability else "mixed")}),
-                                    now, now,
-                                ),
-                            )
-                            conn.commit()
-
-                            epistemic_profiles.append({
-                                "book_id": bid,
-                                "tradition": profile.tradition,
-                                "framework": fw_val,
-                                "discipline": dm_val,
-                                "topics": json.dumps(profile.primary_topics or []),
-                                "evidence_level": ev_val,
-                                "reasoning_style": rs_val,
-                                "authority": au_val,
-                            })
-                            generated_count += 1
-
+                        generated_count += 1
                 conn.close()
             except Exception as exc:
-                logger.warning("epistemic_profile_loading_failed", error=str(exc))
+                logger.warning("epistemic_profile_generation_failed", error=str(exc))
 
             result.epistemic_profiles = epistemic_profiles
+            rt_context.register_artifact("RetrievalResult", "knowledge_retrieval")
             await _emit("knowledge_graph", "done", {
-                "confidence": stage2.confidence,
-                "duration_ms": stage2.duration_ms,
-                "error": stage2.error,
+                "confidence": retrieval_result.retrieval_confidence,
+                "duration_ms": retrieval_result.duration_ms,
                 "message": f"{chunk_count} بخش از {len(books_found)} کتاب | {len(epistemic_profiles)} پروفایل شناختی"
                            + (f" ({generated_count} جدید)" if generated_count else ""),
                 "details": {
@@ -456,10 +451,26 @@ class AyenehPipeline:
                     "books": books_found,
                     "epistemic_profiles": len(epistemic_profiles),
                     "generated": generated_count,
+                    "result_id": retrieval_result.result_id,
                 },
             })
 
             # Stage 5.5: Concept Integration (SPEC-01A §93)
+            # Record RetrievalExecutionTrace (before concept integration)
+            kr_duration_ms = (time.monotonic() - kr_start) * 1000
+            trace_registry.end_stage("knowledge_retrieval", RetrievalExecutionTrace(
+                request_id=session.session_id,
+                execution_id=kr_trace_id,
+                plan_id=getattr(retrieval_plan, 'plan_id', ''),
+                retrieved_chunks=retrieval_result.total_chunks,
+                retrieved_profiles=retrieval_result.total_profiles,
+                retrieved_citations=len(retrieval_result.citations),
+                cache_hits=retrieval_result.cache_hits,
+                cache_misses=retrieval_result.cache_misses,
+                validation_passed=True,
+                timing=ExecutionTiming(wall_ms=kr_duration_ms),
+            ))
+
             await _emit("concept_integration", "running", {"message": "یکپارچه‌سازی دانش بازیابی شده..."})
             from ayeneh.runtime.concept_integration import ConceptIntegrator
             concept_integrator = ConceptIntegrator()
@@ -485,16 +496,45 @@ class AyenehPipeline:
                 },
             })
 
-            # Stage 6: Graph Reasoning Engine
+            # Stage 6: Reasoning Pipeline (SPEC-24 compliant)
             await _emit("graph_reasoning", "running", {"message": "تحلیل روابط و استدلال روی گراف دانش..."})
-            stage3 = self._stage_graph_reasoning(context, result.knowledge_chunks)
-            result.stages.append(stage3)
-            result.graph_reasoning = stage3.output_data.get("result")
+            rea_trace_id = trace_registry.begin_stage("reasoning", request_id=session.session_id)
+            rea_start = time.monotonic()
+            from ayeneh.runtime.reasoning_pipeline import ReasoningPipeline
+            reasoning_pipe = ReasoningPipeline()
+            reasoning_result = reasoning_pipe.execute(
+                retrieval_result=retrieval_result,
+                query_analysis=query_analysis,
+                session_id=session.session_id,
+                knowledge_version=session.knowledge_version,
+                graph_version=session.graph_version,
+            )
+            result.reasoning_result = reasoning_result
+            rt_context.register_artifact("ReasoningResult", "reasoning_pipeline")
+
+            # Record ReasoningTrace
+            from ayeneh.observability.trace_types import ReasoningTrace
+            rea_duration_ms = (time.monotonic() - rea_start) * 1000
+            trace_registry.end_stage("reasoning", ReasoningTrace(
+                request_id=session.session_id,
+                execution_id=rea_trace_id,
+                reasoning_mode=reasoning_result.reasoning_mode,
+                conclusions_count=len(reasoning_result.conclusions),
+                conflicts_count=len(reasoning_result.conflicts),
+                confidence_components=reasoning_result.confidence_components,
+                uncertainty_statements=tuple(reasoning_result.uncertainty_statements),
+                timing=ExecutionTiming(wall_ms=rea_duration_ms),
+            ))
             await _emit("graph_reasoning", "done", {
-                "confidence": stage3.confidence,
-                "duration_ms": stage3.duration_ms,
-                "error": stage3.error,
-                "message": f"استدلال با اطمینان {stage3.confidence:.0%}",
+                "confidence": reasoning_result.overall_confidence,
+                "duration_ms": reasoning_result.duration_ms,
+                "message": f"استدلال {reasoning_result.reasoning_mode} با اطمینان {reasoning_result.overall_confidence:.0%}",
+                "details": {
+                    "mode": reasoning_result.reasoning_mode,
+                    "conclusions": len(reasoning_result.conclusions),
+                    "conflicts": len(reasoning_result.conflicts),
+                    "uncertainty": len(reasoning_result.uncertainty_statements),
+                },
             })
 
             # Stage 7: Interpretation Engine (در صورت نیاز)
@@ -536,21 +576,60 @@ class AyenehPipeline:
             enriched_context = self._build_enriched_context(context, result)
             books_in_prompt = [c.get("book_title", "") for c in result.knowledge_chunks[:3]]
 
-            # Stage 10 & 11: LLM Execution (Local or Cloud)
+            # Stage 10 & 11: Response Pipeline (SPEC-25 compliant) + LLM Execution
             await _emit("llm_generation", "running", {
                 "message": f"تولید پاسخ با {selected_model}...",
                 "books_used": books_in_prompt,
             })
-            stage6 = await self._stage_response_generation(enriched_context)
-            result.stages.append(stage6)
-            result.final_response = stage6.output_data.get("response_text", "")
+            resp_trace_id = trace_registry.begin_stage("response", request_id=session.session_id)
+            resp_start = time.monotonic()
+
+            # SPEC-25 ResponsePipeline: validates reasoning and constructs response structure
+            from ayeneh.runtime.response_pipeline import ResponsePipeline
+            response_pipe = ResponsePipeline()
+            response_artifact = response_pipe.execute(
+                reasoning_result=reasoning_result,
+                query_analysis=query_analysis,
+                session_id=session.session_id,
+                knowledge_version=session.knowledge_version,
+            )
+
+            # If SPEC-25 validation passed, enhance with LLM-generated text
+            if response_artifact.validation_passed and response_artifact.response_text:
+                result.final_response = response_artifact.response_text
+            else:
+                # Fallback: generate via LLM as before
+                stage6 = await self._stage_response_generation(enriched_context)
+                result.stages.append(stage6)
+                result.final_response = stage6.output_data.get("response_text", "")
+
+            result.response_artifact = response_artifact
+            rt_context.register_artifact("ResponseArtifact", "response_pipeline")
+
+            # Record ResponseTrace
+            from ayeneh.observability.trace_types import ResponseTrace
+            resp_duration_ms = (time.monotonic() - resp_start) * 1000
+            trace_registry.end_stage("response", ResponseTrace(
+                request_id=session.session_id,
+                execution_id=resp_trace_id,
+                validation_passed=response_artifact.validation_passed,
+                validation_errors=tuple(response_artifact.validation_errors),
+                citation_count=len(response_artifact.citations),
+                uncertainty_count=len(response_artifact.uncertainty_statements),
+                response_length=len(result.final_response),
+                timing=ExecutionTiming(wall_ms=resp_duration_ms),
+            ))
             response_len = len(result.final_response)
             await _emit("llm_generation", "done", {
-                "confidence": stage6.confidence,
-                "duration_ms": stage6.duration_ms,
-                "error": stage6.error,
+                "confidence": response_artifact.overall_confidence,
+                "duration_ms": response_artifact.duration_ms,
                 "message": f"پاسخ تولید شد ({response_len} کاراکتر) با {selected_model}",
-                "details": {"response_length": response_len, "model_used": selected_model},
+                "details": {
+                    "response_length": response_len,
+                    "model_used": selected_model,
+                    "validation_passed": response_artifact.validation_passed,
+                    "citations": len(response_artifact.citations),
+                },
             })
 
             # Stage 12: Response Builder with Provenance
@@ -681,6 +760,12 @@ class AyenehPipeline:
 
         # Build trace record per SPEC-01A §28, §38
         result.trace_record = trace_recorder.build_trace(total_duration_ms=result.total_duration_ms)
+
+        # Build structured RuntimeTrace from all stage traces
+        result.runtime_trace = trace_registry.build_runtime_trace(
+            request_id=session.session_id,
+            config_version="1.0.0",
+        )
 
         return result
 

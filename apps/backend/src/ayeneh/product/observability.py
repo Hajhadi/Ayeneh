@@ -5,10 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ayeneh.observability.base import MetricsPublisher
+
 
 @dataclass
-class ProductMetrics:
+class ProductMetrics(MetricsPublisher):
     """Tracks per-product execution metrics."""
+
+    def __post_init__(self) -> None:
+        MetricsPublisher.__init__(self, "product")
 
     executions_per_product: dict[str, int] = field(default_factory=dict)
     token_usage_per_product: dict[str, int] = field(default_factory=dict)

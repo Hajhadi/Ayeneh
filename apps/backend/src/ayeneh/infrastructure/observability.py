@@ -18,12 +18,19 @@ class TracingConfig:
     sample_rate: float = 1.0
 
 
+from ayeneh.observability.base import MetricsPublisher
+
+
 @dataclass
-class PrometheusMetrics:
+class PrometheusMetrics(MetricsPublisher):
     """In-memory Prometheus-style metrics counters.
 
     In production, these would be backed by prometheus_client.
+    Subclasses MetricsPublisher for shared snapshot/summary interface.
     """
+
+    def __post_init__(self) -> None:
+        MetricsPublisher.__init__(self, "infrastructure")
 
     request_count: dict[str, int] = field(default_factory=dict)
     request_duration_ms: dict[str, float] = field(default_factory=dict)

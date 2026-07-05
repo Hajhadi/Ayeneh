@@ -181,6 +181,12 @@ class Container:
         self.audit_logger = AuditLogger()
         self.metrics = PrometheusMetrics()
 
+        # Observability layer
+        from ayeneh.observability.config import ObservabilityConfig
+        from ayeneh.observability.diagnostics import DiagnosticsCollector
+        self.observability_config = ObservabilityConfig()
+        self.diagnostics = DiagnosticsCollector()
+
         # LLM providers
         from ayeneh.llm.registry import initialize_providers
         self.provider_registry = initialize_providers(self.settings)
@@ -189,6 +195,47 @@ class Container:
         except RuntimeError:
             self.llm_gateway = None
             logger.warning("no_llm_provider_available")
+
+        # AI Router — single entry point for all AI requests
+        from ayeneh.ai_router import AIRouter
+        from ayeneh.ai_router.providers import OpenAIProvider, AnthropicProvider, LMStudioProvider
+        from ayeneh.ai_router.providers.ollama import OllamaProvider, OllamaConfig
+        from ayeneh.ai_router.registry import ProviderRegistry as AIProviderRegistry
+        from ayeneh.ai_router.policies import PolicyEngine
+
+        self.ai_provider_registry = AIProviderRegistry()
+
+        # Register cloud providers
+        if self.settings.llm_openai_api_key:
+            base_url = self.settings.llm_openai_base_url or "https://api.openai.com/v1"
+            self.ai_provider_registry.register("openai", OpenAIProvider(
+                api_key=self.settings.llm_openai_api_key,
+                model=self.settings.llm_default_model,
+                base_url=base_url,
+            ))
+
+        # Register local providers (Ollama) with production config
+        if self.settings.local_enabled:
+            ollama_config = OllamaConfig(
+                base_url=self.settings.local_ollama_url,
+                model=self.settings.local_model_name,
+                timeout=self.settings.local_timeout,
+                max_tokens=self.settings.local_max_tokens,
+                temperature=self.settings.local_temperature,
+                top_p=self.settings.local_top_p,
+                top_k=self.settings.local_top_k,
+                num_ctx=self.settings.local_num_ctx,
+                num_threads=self.settings.local_num_threads,
+                num_gpu=self.settings.local_num_gpu,
+            )
+            ollama_provider = OllamaProvider(config=ollama_config)
+
+            # Register provider (health check will run at startup)
+            self.ai_provider_registry.register("ollama", ollama_provider)
+            logger.info("ollama_provider_registered", model=ollama_config.model)
+
+        self.ai_provider_registry.set_fallback_chain(["ollama", "openai"])
+        self.ai_router = AIRouter(registry=self.ai_provider_registry, policy_engine=PolicyEngine())
 
         self.prompt_service = PromptService()
 
@@ -230,7 +277,7 @@ class Container:
         # Wrap provider with adapter to match ConversationAgent's LLMGateway interface
         adapted_llm = ProviderGatewayAdapter(self.llm_gateway) if self.llm_gateway else None
 
-        self.conversation_agent = ConversationAgent(llm=adapted_llm)
+        self.conversation_agent = ConversationAgent(llm=adapted_llm, ai_router=self.ai_router)
         self.memory_agent = MemoryAgent()
         self.library_agent = LibraryAgent()
         self.pattern_agent = PatternAgent()
@@ -262,9 +309,22 @@ class Container:
         )
 
     async def startup(self) -> None:
-        """Async startup operations (connect to DB, Redis, tracing)."""
+        """Async startup operations (connect to DB, Redis, tracing, health checks)."""
         if self.database:
             await self.database.connect()
+
+        # Ollama health check at startup
+        if hasattr(self, "ai_provider_registry"):
+            ollama_provider = self.ai_provider_registry.get("ollama")
+            if ollama_provider:
+                try:
+                    healthy = await ollama_provider.health_check()
+                    if healthy:
+                        logger.info("ollama_healthy", model=ollama_provider.config.model)
+                    else:
+                        logger.warning("ollama_unavailable_at_startup", model=ollama_provider.config.model)
+                except Exception as exc:
+                    logger.warning("ollama_startup_check_failed", error=str(exc))
 
         if self.settings.redis_url:
             try:
@@ -286,6 +346,9 @@ class Container:
                 service_name=self.settings.otel_service_name,
                 endpoint=self.settings.otel_endpoint,
             ))
+
+        # Register subsystem health checks for DiagnosticsCollector
+        self._register_diagnostics()
 
     async def shutdown(self) -> None:
         """Graceful shutdown — disconnect DB, Redis, flush tracing."""
@@ -315,3 +378,40 @@ class Container:
                 return UnitOfWork(sf)
             return factory
         return None
+
+    def _register_diagnostics(self) -> None:
+        """Register subsystem health checks with DiagnosticsCollector."""
+        from ayeneh.observability.diagnostics import SubsystemHealth
+        import time
+
+        def check_database() -> SubsystemHealth:
+            return SubsystemHealth(
+                name="database",
+                status="healthy" if self.database else "not_configured",
+                version="sqlite",
+            )
+
+        def check_ai_router() -> SubsystemHealth:
+            return SubsystemHealth(
+                name="ai_router",
+                status="healthy" if self.ai_router else "not_configured",
+            )
+
+        def check_llm_gateway() -> SubsystemHealth:
+            return SubsystemHealth(
+                name="llm_gateway",
+                status="healthy" if self.llm_gateway else "not_configured",
+            )
+
+        def check_metrics() -> SubsystemHealth:
+            snap = self.metrics.snapshot()
+            return SubsystemHealth(
+                name="metrics",
+                status="healthy",
+                counters=snap.counters,
+            )
+
+        self.diagnostics.register("database", check_database)
+        self.diagnostics.register("ai_router", check_ai_router)
+        self.diagnostics.register("llm_gateway", check_llm_gateway)
+        self.diagnostics.register("metrics", check_metrics)

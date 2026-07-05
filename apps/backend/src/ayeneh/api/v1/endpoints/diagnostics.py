@@ -34,10 +34,45 @@ async def get_diagnostics(request: Request) -> dict[str, Any]:
         checks["circuit_breakers"] = {
             "states": container.circuit_breakers.get_all_states() if hasattr(container.circuit_breakers, "get_all_states") else {},
         }
-        if hasattr(container, "metrics") and container.metrics:
+        if hasattr(container, "metrics") and container.metrics and hasattr(container.metrics, "get_summary"):
             checks["metrics"] = container.metrics.get_summary()
-        if hasattr(container, "product_metrics") and container.product_metrics:
+        if hasattr(container, "product_metrics") and container.product_metrics and hasattr(container.product_metrics, "get_summary"):
             checks["product_metrics"] = container.product_metrics.get_summary()
+
+        # AI Router diagnostics
+        if hasattr(container, "ai_router") and container.ai_router:
+            checks["ai_router"] = {
+                "status": "initialized",
+                "providers": container.ai_router.get_provider_status(),
+                "metrics": container.ai_router.get_metrics(),
+            }
+
+        # Ollama diagnostics
+        if hasattr(container, "ai_provider_registry") and container.ai_provider_registry:
+            ollama_provider = container.ai_provider_registry.get("ollama")
+            if ollama_provider:
+                try:
+                    ollama_diagnostics = await ollama_provider.get_diagnostics()
+                    checks["ollama"] = {
+                        "status": "connected" if ollama_diagnostics.ollama_running else "not_running",
+                        "configured_model": ollama_diagnostics.configured_model,
+                        "model_available": ollama_diagnostics.model_available,
+                        "inference_available": ollama_diagnostics.inference_available,
+                        "installed_models": ollama_diagnostics.installed_models,
+                        "estimated_vram_gb": ollama_diagnostics.estimated_vram_gb,
+                        "estimated_ram_gb": ollama_diagnostics.estimated_ram_gb,
+                    }
+                    if ollama_diagnostics.model_info:
+                        checks["ollama"]["model_info"] = {
+                            "name": ollama_diagnostics.model_info.name,
+                            "parameter_size": ollama_diagnostics.model_info.parameter_size,
+                            "quantization": ollama_diagnostics.model_info.quantization,
+                            "context_window": ollama_diagnostics.model_info.context_window,
+                        }
+                except Exception as exc:
+                    checks["ollama"] = {"status": "error", "error": str(exc)}
+            else:
+                checks["ollama"] = {"status": "not_configured"}
     else:
         checks["llm"] = {"status": "not_configured"}
         checks["database"] = {"status": "not_configured"}

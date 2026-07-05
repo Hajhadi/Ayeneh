@@ -5,10 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ayeneh.observability.base import MetricsPublisher
+
 
 @dataclass
-class GoalMetrics:
+class GoalMetrics(MetricsPublisher):
     """Tracks goal-related metrics for observability and Prometheus export."""
+
+    def __post_init__(self) -> None:
+        MetricsPublisher.__init__(self, "goal")
 
     goal_retrieval_total: int = 0
     goal_prompt_tokens: int = 0
