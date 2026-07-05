@@ -149,6 +149,9 @@ class Container:
     # COG cognitive architecture
     _cog_pipeline: Any = field(default=None, init=False)
 
+    # MEMO memory architecture
+    _memo_pipeline: Any = field(default=None, init=False)
+
     def __post_init__(self) -> None:
         self.settings = get_settings()
 
@@ -389,6 +392,14 @@ class Container:
             from ayeneh.cog.pipeline.orchestrator import CognitivePipelineOrchestrator
             self._cog_pipeline = CognitivePipelineOrchestrator()
         return self._cog_pipeline
+
+    @property
+    def memo_pipeline(self) -> Any:
+        """Lazily construct and cache the MEMO memory pipeline orchestrator."""
+        if self._memo_pipeline is None:
+            from ayeneh.memo.pipeline.orchestrator import MEMOPipelineOrchestrator
+            self._memo_pipeline = MEMOPipelineOrchestrator()
+        return self._memo_pipeline
 
     def _register_diagnostics(self) -> None:
         """Register subsystem health checks with DiagnosticsCollector."""
