@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ayeneh.api.v1.endpoints import (
+    act,
     blind_spots,
     cog,
     conversations,
@@ -44,3 +45,4 @@ api_router.include_router(goal_api.router, prefix="/goals", tags=["goals"])
 api_router.include_router(product_api.router, prefix="/products", tags=["products"])
 api_router.include_router(dlg.router, prefix="/dlg", tags=["dialogue"])
 api_router.include_router(dec.router, tags=["decision"])
+api_router.include_router(act.router, tags=["action_architecture"])

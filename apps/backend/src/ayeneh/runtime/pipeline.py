@@ -99,6 +99,7 @@ class PipelineResult:
     memo_analysis: Any = None
     dlg_analysis: Any = None
     dec_analysis: Any = None
+    act_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -1028,6 +1029,56 @@ class AyenehPipeline:
                 dec_duration_ms = (time.monotonic() - dec_start) * 1000
                 logger.debug("decision_architecture_failed", error=str(exc))
                 await _emit("decision_architecture", "done", {"confidence": 0.5, "duration_ms": dec_duration_ms, "message": "تصمیم‌گیری شناختی انجام نشد"})
+
+            # Stage 18: ACT Action Architecture
+            act_start = time.monotonic()
+            await _emit("action_architecture", "running", {"message": "مدیریت اجرا و عادات..."})
+            try:
+                from ayeneh.act.execution_monitoring.engine import ExecutionMonitoringEngine
+                from ayeneh.act.habit_formation.engine import HabitFormationEngine
+                from ayeneh.act.adaptive_intervention.engine import AdaptiveInterventionEngine
+                from ayeneh.act.feedback_loop.engine import FeedbackLoopCoordinator
+                from ayeneh.act.autonomous_workflow.engine import AutonomousWorkflowEngine
+
+                act_context = {
+                    'user_message': context.get('user_message', ''),
+                    'dec_analysis': getattr(result, 'dec_analysis', None),
+                    'cog_analysis': getattr(result, 'cog_analysis', None),
+                }
+
+                exec_engine = ExecutionMonitoringEngine()
+                exec_result = exec_engine.process({}, act_context)
+
+                habit_engine = HabitFormationEngine()
+                habit_result = habit_engine.process([], act_context)
+
+                intervention_engine = AdaptiveInterventionEngine()
+                intervention_result = intervention_engine.process({}, exec_result)
+
+                feedback_engine = FeedbackLoopCoordinator()
+                feedback_result = feedback_engine.process({}, act_context)
+
+                workflow_engine = AutonomousWorkflowEngine()
+                workflow_result = workflow_engine.process([], act_context)
+
+                result.act_analysis = {
+                    'executions': 1 if exec_result else 0,
+                    'habits': len(habit_result.habits) if hasattr(habit_result, 'habits') else 0,
+                    'interventions': len(intervention_result.interventions) if hasattr(intervention_result, 'interventions') else 0,
+                    'feedback_items': len(feedback_result.feedback_items) if hasattr(feedback_result, 'feedback_items') else 0,
+                    'workflows': len(workflow_result.workflows) if hasattr(workflow_result, 'workflows') else 0,
+                }
+
+                act_duration_ms = (time.monotonic() - act_start) * 1000
+                await _emit("action_architecture", "done", {
+                    "confidence": 0.9,
+                    "duration_ms": act_duration_ms,
+                    "message": f"اجرا: {result.act_analysis['executions']}، عادات: {result.act_analysis['habits']}",
+                })
+            except Exception as exc:
+                act_duration_ms = (time.monotonic() - act_start) * 1000
+                logger.debug("action_architecture_failed", error=str(exc))
+                await _emit("action_architecture", "done", {"confidence": 0.5, "duration_ms": act_duration_ms, "message": "مدیریت اجرا انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))
