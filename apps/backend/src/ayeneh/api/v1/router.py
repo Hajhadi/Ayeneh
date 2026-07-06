@@ -21,6 +21,7 @@ from ayeneh.api.v1.endpoints import (
     patterns,
     reflections,
     runtime,
+    self_arch,
     users,
     wizard,
 )
@@ -48,3 +49,4 @@ api_router.include_router(dlg.router, prefix="/dlg", tags=["dialogue"])
 api_router.include_router(dec.router, tags=["decision"])
 api_router.include_router(act.router, tags=["action_architecture"])
 api_router.include_router(integration.router, prefix="/integration", tags=["integration"])
+api_router.include_router(self_arch.router, prefix="/self", tags=["self_architecture"])

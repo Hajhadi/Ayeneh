@@ -101,6 +101,7 @@ class PipelineResult:
     dec_analysis: Any = None
     act_analysis: Any = None
     int_analysis: Any = None
+    self_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -1153,6 +1154,63 @@ class AyenehPipeline:
                 int_duration_ms = (time.monotonic() - int_start) * 1000
                 logger.debug("integration_architecture_failed", error=str(exc))
                 await _emit("integration_architecture", "done", {"confidence": 0.5, "duration_ms": int_duration_ms, "message": "یکپارچه‌سازی شناختی انجام نشد"})
+
+            # Stage 19.5: SELF Self Architecture
+            self_start = time.monotonic()
+            await _emit("self_architecture", "running", {"message": "تحلیل خود- معماری..."})
+            try:
+                from ayeneh.self_arch.self_consistency.engine import SelfConsistencyEngine
+                from ayeneh.self_arch.self_evolution.engine import SelfEvolutionEngine
+
+                # SELF-04: Self-Consistency Check
+                consistency_engine = SelfConsistencyEngine()
+                consistency_result = consistency_engine.check(
+                    context={
+                        'cog_analysis': getattr(result, 'cog_analysis', None),
+                        'inference_analysis': getattr(result, 'inference_analysis', None),
+                        'dlg_analysis': getattr(result, 'dlg_analysis', None),
+                        'dec_analysis': getattr(result, 'dec_analysis', None),
+                        'act_analysis': getattr(result, 'act_analysis', None),
+                        'int_analysis': getattr(result, 'int_analysis', None),
+                        'memo_analysis': getattr(result, 'memo_analysis', None),
+                    },
+                    session_id=session.session_id,
+                )
+
+                # SELF-05: Self-Evolution
+                evolution_engine = SelfEvolutionEngine()
+                evolution_result = evolution_engine.evolve(
+                    context={
+                        'operational_records': [],
+                        'consistency_result': {
+                            'confidence': consistency_result.confidence,
+                            'conflicts': len(consistency_result.conflicts),
+                        },
+                    },
+                    session_id=session.session_id,
+                )
+
+                result.self_analysis = {
+                    'consistency_id': consistency_result.consistency_id,
+                    'consistency_type': consistency_result.consistency_object.consistency_type,
+                    'conflicts': len(consistency_result.conflicts),
+                    'consistency_confidence': consistency_result.confidence,
+                    'evolution_id': evolution_result.evolution_id,
+                    'architecture_version': evolution_result.evolution_object.architecture_version,
+                    'approval_status': evolution_result.evolution_object.approval_status,
+                    'evolution_confidence': evolution_result.confidence,
+                }
+
+                self_duration_ms = (time.monotonic() - self_start) * 1000
+                await _emit("self_architecture", "done", {
+                    "confidence": consistency_result.confidence,
+                    "duration_ms": self_duration_ms,
+                    "message": f"وضعیت: {consistency_result.consistency_object.consistency_type}، تعارضات: {len(consistency_result.conflicts)}",
+                })
+            except Exception as exc:
+                self_duration_ms = (time.monotonic() - self_start) * 1000
+                logger.debug("self_architecture_failed", error=str(exc))
+                await _emit("self_architecture", "done", {"confidence": 0.5, "duration_ms": self_duration_ms, "message": "تحلیل خود- معماری انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))
