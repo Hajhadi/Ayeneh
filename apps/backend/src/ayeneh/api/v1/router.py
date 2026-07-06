@@ -8,6 +8,7 @@ from ayeneh.api.v1.endpoints import (
     blind_spots,
     cog,
     conversations,
+    dec,
     diagnostics,
     dlg,
     health,
@@ -42,3 +43,4 @@ api_router.include_router(inf.router, prefix="/inf", tags=["inference"])
 api_router.include_router(goal_api.router, prefix="/goals", tags=["goals"])
 api_router.include_router(product_api.router, prefix="/products", tags=["products"])
 api_router.include_router(dlg.router, prefix="/dlg", tags=["dialogue"])
+api_router.include_router(dec.router, tags=["decision"])

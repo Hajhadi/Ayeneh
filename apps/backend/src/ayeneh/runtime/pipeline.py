@@ -98,6 +98,7 @@ class PipelineResult:
     inference_analysis: Any = None
     memo_analysis: Any = None
     dlg_analysis: Any = None
+    dec_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -975,6 +976,58 @@ class AyenehPipeline:
                 dlg_duration_ms = (time.monotonic() - dlg_start) * 1000
                 logger.debug("dialogue_management_failed", error=str(exc))
                 await _emit("dialogue_management", "done", {"confidence": 0.5, "duration_ms": dlg_duration_ms, "message": "مدیریت گفتگو انجام نشد"})
+
+            # Stage 17: DEC Decision Architecture
+            dec_start = time.monotonic()
+            await _emit("decision_architecture", "running", {"message": "تصمیم‌گیری شناختی..."})
+            try:
+                from ayeneh.dec.action_evaluation.engine import ActionEvaluationEngine
+                from ayeneh.dec.strategy_optimization.engine import StrategyOptimizationEngine
+
+                dec_context = {
+                    'user_message': context.get('user_message', ''),
+                    'conversation_history': context.get('conversation_history', []),
+                    'cog_analysis': getattr(result, 'cog_analysis', None),
+                    'inference_analysis': getattr(result, 'inference_analysis', None),
+                    'dlg_analysis': getattr(result, 'dlg_analysis', None),
+                }
+
+                # Evaluate any pending actions from context
+                action_eval_engine = ActionEvaluationEngine()
+                action_eval_result = action_eval_engine.evaluate(
+                    action_description=context.get('user_message', ''),
+                    expected_outcome=context.get('expected_outcome', ''),
+                    observed_outcome=context.get('observed_outcome', ''),
+                    context=dec_context,
+                    session_id=session.session_id,
+                )
+
+                # Optimize strategies based on accumulated data
+                strategy_engine = StrategyOptimizationEngine()
+                strategy_result = strategy_engine.optimize(
+                    strategy_description=f"Response strategy for: {context.get('user_message', '')[:50]}",
+                    context=dec_context,
+                    session_id=session.session_id,
+                )
+
+                result.dec_analysis = {
+                    'evaluation_id': action_eval_result.evaluation_id,
+                    'outcome_category': action_eval_result.comparison.category.category if action_eval_result.comparison else 'inconclusive',
+                    'strategy_id': strategy_result.strategy_id,
+                    'suggestions_count': len(strategy_result.suggestions),
+                    'confidence': action_eval_result.confidence,
+                }
+
+                dec_duration_ms = (time.monotonic() - dec_start) * 1000
+                await _emit("decision_architecture", "done", {
+                    "confidence": action_eval_result.confidence,
+                    "duration_ms": dec_duration_ms,
+                    "message": f"ارزیابی: {action_eval_result.comparison.category.category if action_eval_result.comparison else 'n/a'}، پیشنهادات: {len(strategy_result.suggestions)}",
+                })
+            except Exception as exc:
+                dec_duration_ms = (time.monotonic() - dec_start) * 1000
+                logger.debug("decision_architecture_failed", error=str(exc))
+                await _emit("decision_architecture", "done", {"confidence": 0.5, "duration_ms": dec_duration_ms, "message": "تصمیم‌گیری شناختی انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))
