@@ -100,6 +100,7 @@ class PipelineResult:
     dlg_analysis: Any = None
     dec_analysis: Any = None
     act_analysis: Any = None
+    int_analysis: Any = None
 
 
 class AyenehPipeline:
@@ -1079,6 +1080,79 @@ class AyenehPipeline:
                 act_duration_ms = (time.monotonic() - act_start) * 1000
                 logger.debug("action_architecture_failed", error=str(exc))
                 await _emit("action_architecture", "done", {"confidence": 0.5, "duration_ms": act_duration_ms, "message": "مدیریت اجرا انجام نشد"})
+
+            # Stage 19: INT Integration Architecture
+            int_start = time.monotonic()
+            await _emit("integration_architecture", "running", {"message": "یکپارچه‌سازی شناختی..."})
+            try:
+                from ayeneh.int.orchestrator.engine import CognitiveOrchestrator
+                from ayeneh.int.cognitive_state.engine import CognitiveStateEngine
+                from ayeneh.int.governance.engine import GovernanceEngine
+
+                # INT-01: Orchestrate cognitive modules
+                orch_engine = CognitiveOrchestrator()
+                orch_result = orch_engine.orchestrate(
+                    task_description=context.get('user_message', ''),
+                    task_id=session.session_id,
+                    context={
+                        'cog_analysis': getattr(result, 'cog_analysis', None),
+                        'inference_analysis': getattr(result, 'inference_analysis', None),
+                        'dlg_analysis': getattr(result, 'dlg_analysis', None),
+                        'dec_analysis': getattr(result, 'dec_analysis', None),
+                        'act_analysis': getattr(result, 'act_analysis', None),
+                    },
+                    session_id=session.session_id,
+                )
+
+                # INT-04: Unified Cognitive State
+                state_engine = CognitiveStateEngine()
+                state_result = state_engine.process(
+                    context={
+                        'active_modules': ['cog', 'inf', 'dlg', 'dec', 'act'],
+                        'active_goals': [],
+                        'module_data': {
+                            dim: {'active': True, 'confidence': 0.8}
+                            for dim in ['memory', 'inference', 'executive', 'action', 'self', 'communication', 'context', 'governance']
+                        },
+                    },
+                    session_id=session.session_id,
+                )
+
+                # INT-05: System Governance
+                gov_engine = GovernanceEngine()
+                gov_result = gov_engine.process(
+                    context={
+                        'domain': 'architectural',
+                        'current_stage': 'normal_operation',
+                        'active_modules': ['cog', 'inf', 'dlg', 'dec', 'act'],
+                        'health_score': state_result.state_object.architecture_health if state_result.state_object else 1.0,
+                    },
+                    session_id=session.session_id,
+                )
+
+                result.int_analysis = {
+                    'orchestration_id': orch_result.orchestration_id,
+                    'modules': orch_result.module_count,
+                    'orchestration_confidence': orch_result.confidence,
+                    'state_id': state_result.state_id,
+                    'state_health': state_result.state_object.architecture_health if state_result.state_object else 0.0,
+                    'consistency': state_result.state_object.consistency_status if state_result.state_object else 'unknown',
+                    'conflicts': len(state_result.conflicts),
+                    'governance_id': gov_result.governance_id,
+                    'governance_approval': gov_result.governance_object.approval_status if gov_result.governance_object else 'pending',
+                    'audit_count': gov_result.audit_count,
+                }
+
+                int_duration_ms = (time.monotonic() - int_start) * 1000
+                await _emit("integration_architecture", "done", {
+                    "confidence": orch_result.confidence,
+                    "duration_ms": int_duration_ms,
+                    "message": f"ارکستراسیون: {orch_result.module_count} ماژول، وضعیت: {state_result.state_object.consistency_status if state_result.state_object else 'n/a'}",
+                })
+            except Exception as exc:
+                int_duration_ms = (time.monotonic() - int_start) * 1000
+                logger.debug("integration_architecture_failed", error=str(exc))
+                await _emit("integration_architecture", "done", {"confidence": 0.5, "duration_ms": int_duration_ms, "message": "یکپارچه‌سازی شناختی انجام نشد"})
 
         except Exception as exc:
             logger.exception("pipeline_failed", error=str(exc))

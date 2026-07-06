@@ -14,6 +14,7 @@ from ayeneh.api.v1.endpoints import (
     dlg,
     health,
     inf,
+    integration,
     library,
     memo,
     memories,
@@ -46,3 +47,4 @@ api_router.include_router(product_api.router, prefix="/products", tags=["product
 api_router.include_router(dlg.router, prefix="/dlg", tags=["dialogue"])
 api_router.include_router(dec.router, tags=["decision"])
 api_router.include_router(act.router, tags=["action_architecture"])
+api_router.include_router(integration.router, prefix="/integration", tags=["integration"])
