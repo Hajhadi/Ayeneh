@@ -143,12 +143,9 @@ class TestMEMOPipeline:
     def test_retrieval(self) -> None:
         from ayeneh.memo.retrieval.engine import RetrievalEngine
         from ayeneh.memo.retrieval.types import RetrievalRequest
-        try:
-            req = RetrievalRequest(query="career", user_id="u1")
-            result = RetrievalEngine().run_pipeline(req)
-            assert result is not None
-        except Exception:
-            pytest.skip("RetrievalEngine requires full context")
+        req = RetrievalRequest(request_identifier="req-1", conversation_context="career advice")
+        result = RetrievalEngine().run_pipeline(req)
+        assert result is not None
 
     def test_knowledge_graph(self) -> None:
         from ayeneh.memo.knowledge_graph.graph import KnowledgeGraph
@@ -160,13 +157,12 @@ class TestMEMOPipeline:
 
     def test_versioning(self) -> None:
         from ayeneh.memo.versioning.engine import VersioningEngine
-        from ayeneh.memo.versioning.types import VersionObject
-        try:
-            v = VersionObject(version_identifier="v1", target_memory="mem-1", revision_type="expansion")
-            result = VersioningEngine().process_update([v])
-            assert result is not None
-        except TypeError:
-            pytest.skip("VersionObject API mismatch")
+        from ayeneh.memo.base import MemoryObject
+        from datetime import UTC, datetime
+        old = MemoryObject(identifier="mem-1", memory_type="semantic", creation_time=datetime.now(UTC), confidence=0.5)
+        new = MemoryObject(identifier="mem-1", memory_type="semantic", creation_time=datetime.now(UTC), confidence=0.8)
+        result = VersioningEngine().process_update(old, new)
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------
@@ -228,11 +224,14 @@ class TestDLGPipeline:
 
     def test_reflection_timing(self) -> None:
         from ayeneh.dlg.reflection.engine import ReflectionTimingEngine
-        try:
-            result = ReflectionTimingEngine().process({}, [])
-            assert result is not None
-        except Exception:
-            pytest.skip("ReflectionTimingEngine requires populated context")
+        from ayeneh.dlg.reflection.types import DetectedPattern
+        patterns = [DetectedPattern(pattern_type="repeated_behavior", strength=0.8)]
+        result = ReflectionTimingEngine().process(
+            {"goal": "self_improvement", "patterns": ["repeated avoidance"]},
+            [{"role": "user", "content": "I always avoid challenges"}],
+            behavioral_patterns=patterns,
+        )
+        assert result is not None
 
     def test_question_generation(self) -> None:
         from ayeneh.dlg.questioning.engine import QuestionGenerationEngine
@@ -409,16 +408,10 @@ class TestCrossModuleChains:
         from ayeneh.dec.decision_support.engine import DecisionSupportEngine
         from ayeneh.dec.planning.engine import PlanningEngine
 
-        try:
-            ds = DecisionSupportEngine().process("Should I change careers?")
-            assert ds is not None
-        except Exception:
-            pytest.skip("DecisionSupport requires full context")
-        try:
-            pl = PlanningEngine().process("Learn Python", {})
-            assert pl is not None
-        except Exception:
-            pytest.skip("Planning requires full context")
+        ds = DecisionSupportEngine().process("Should I change careers?")
+        assert ds is not None
+        pl = PlanningEngine().process({"goal": "learn_python", "priority": "high"})
+        assert pl is not None
 
     def test_action_to_feedback(self) -> None:
         """Simulate: execution → evaluation → feedback → habit."""
