@@ -9,12 +9,46 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 
 # ---------------------------------------------------------------------------
 # Catalogue enumerations
 # ---------------------------------------------------------------------------
+
+
+class CognitiveBias(str, Enum):
+    """Biases the meta-cognition engine may detect in reasoning."""
+
+    CONFIRMATION = 'confirmation'
+    AVAILABILITY = 'availability'
+    ANCHORING = 'anchoring'
+    NARRATIVE_BIAS = 'narrative_bias'
+    OVERGENERALIZATION = 'overgeneralization'
+    PREMATURE_CLOSURE = 'premature_closure'
+    OVERCONFIDENCE = 'overconfidence'
+
+
+class RevisionStrategy(str, Enum):
+    """Strategies available when reasoning quality degrades."""
+
+    RETRIEVE_MORE_MEMORIES = 'retrieve_more_memories'
+    GENERATE_COMPETING_HYPOTHESES = 'generate_competing_hypotheses'
+    EXPAND_GRAPH_TRAVERSAL = 'expand_graph_traversal'
+    REDUCE_INFERENCE_DEPTH = 'reduce_inference_depth'
+    REQUEST_CLARIFICATION = 'request_clarification'
+    DELAY_CONCLUSION = 'delay_conclusion'
+
+
+class CognitiveResource(str, Enum):
+    """Cognitive resources managed by meta-cognition."""
+
+    WORKING_MEMORY = 'working_memory'
+    INFERENCE_DEPTH = 'inference_depth'
+    GRAPH_TRAVERSAL = 'graph_traversal'
+    REFLECTION_SCHEDULING = 'reflection_scheduling'
+    PREDICTION_COMPLEXITY = 'prediction_complexity'
 
 AWARENESS_LEVELS: dict[int, str] = {
     0: 'no_observable_awareness',
@@ -60,6 +94,13 @@ class MetaCognitiveObject:
     creation_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     revision_history: tuple[dict[str, Any], ...] = ()
     specification_version: str = '1.0.0'
+    reasoning_quality: float = 0.0
+    evidence_quality: float = 0.0
+    confidence_calibration: float = 0.0
+    detected_biases: tuple[str, ...] = ()
+    alternative_strategies: tuple[str, ...] = ()
+    recommended_revisions: tuple[str, ...] = ()
+    remaining_uncertainty: float = 0.0
 
 
 # ---------------------------------------------------------------------------

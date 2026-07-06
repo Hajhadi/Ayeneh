@@ -1,13 +1,15 @@
 """Reality Calibration types for the Ayeneh COG architecture (COG-15).
 
-Defines CalibrationObject and MentalStoryObject — the core data structures
-for distinguishing observed reality from interpretation, narrative, and belief.
+Defines CalibrationObject, PredictionErrorObject, MentalStoryObject — the
+core data structures for distinguishing observed reality from interpretation,
+narrative, and belief.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 
@@ -37,6 +39,18 @@ EVIDENCE_HIERARCHY: dict[int, str] = {
 }
 
 
+class EpistemicIntegrity(str, Enum):
+    """Epistemic layers from most grounded to most interpretive."""
+
+    DIRECT_OBSERVATION = 'direct_observation'
+    RELIABLE_EVIDENCE = 'reliable_evidence'
+    PROBABLE_INFERENCE = 'probable_inference'
+    TENTATIVE_HYPOTHESIS = 'tentative_hypothesis'
+    SPECULATIVE_POSSIBILITY = 'speculative_possibility'
+    NARRATIVE = 'narrative'
+    IDENTITY_INTERPRETATION = 'identity_interpretation'
+
+
 # ---------------------------------------------------------------------------
 # CalibrationObject — a single calibration-tracked entity
 # ---------------------------------------------------------------------------
@@ -55,6 +69,9 @@ class CalibrationObject:
     interpretations: tuple[str, ...] = ()
     narratives: tuple[str, ...] = ()
     associated_beliefs: tuple[str, ...] = ()
+    contradictory_evidence: tuple[str, ...] = ()
+    remaining_uncertainty: float = 0.0
+    identity_references: tuple[str, ...] = ()
     identity_involvement: float = 0.0
     prediction_involvement: float = 0.0
     confidence: float = 0.0
@@ -64,6 +81,28 @@ class CalibrationObject:
     creation_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     revision_history: tuple[dict[str, Any], ...] = ()
     specification_version: str = '1.0.0'
+
+
+# ---------------------------------------------------------------------------
+# PredictionErrorObject — first-class cognitive object for prediction failures
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class PredictionErrorObject:
+    """A first-class object representing a prediction error.
+
+    Preserves predicted vs observed outcome, deviation magnitude,
+    underlying assumptions, and associated hypotheses for learning.
+    """
+
+    error_id: str
+    predicted_outcome: str = ''
+    observed_outcome: str = ''
+    deviation_magnitude: float = 0.0
+    context: str = ''
+    underlying_assumptions: tuple[str, ...] = ()
+    associated_hypotheses: tuple[str, ...] = ()
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------

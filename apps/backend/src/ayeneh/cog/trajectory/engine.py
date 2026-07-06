@@ -286,6 +286,174 @@ class CognitiveTrajectoryEngine:
         phases, _ = self._phase_identifier.identify(list(trajectories.values()))
         return [{'phase_id': p.phase_id, 'description': p.description} for p in phases]
 
+    # ------------------------------------------------------------------
+    # Acceleration Computation (§8)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_acceleration(
+        transitions: list[dict[str, Any]],
+    ) -> float:
+        """Measure changes in velocity across transitions.
+
+        Positive acceleration indicates increasing rate of change;
+        negative indicates slowing.
+        """
+        if len(transitions) < 2:
+            return 0.0
+
+        rates: list[float] = []
+        for i in range(1, len(transitions)):
+            prev_type = transitions[i - 1].get('change_type', 'unchanged')
+            curr_type = transitions[i].get('change_type', 'unchanged')
+            score_map = {
+                'unchanged': 0.0, 'refined': 0.2, 'evolved': 0.5,
+                'transformed': 0.8, 'rewritten': 1.0,
+            }
+            prev_score = score_map.get(prev_type, 0.5)
+            curr_score = score_map.get(curr_type, 0.5)
+            rates.append(curr_score - prev_score)
+
+        return sum(rates) / len(rates) if rates else 0.0
+
+    # ------------------------------------------------------------------
+    # Regression Detection (§16)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_regression(
+        transitions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Identify temporary, context-dependent, or repeated regression."""
+        regressions: list[dict[str, Any]] = []
+        recovery_count = 0
+
+        for i, t in enumerate(transitions):
+            change_type = t.get('change_type', 'unchanged')
+            if change_type in ('weakening', 'fragmenting'):
+                reg = {
+                    'index': i,
+                    'type': change_type,
+                    'description': t.get('curr_text', ''),
+                }
+                regressions.append(reg)
+            elif change_type in ('strengthening', 'integrating') and regressions:
+                recovery_count += 1
+
+        repeated = len(regressions) >= 3
+        temporary = len(regressions) > 0 and recovery_count > 0
+
+        return {
+            'has_regression': len(regressions) > 0,
+            'temporary': temporary,
+            'repeated': repeated,
+            'regressions': tuple(regressions),
+            'recovery_count': recovery_count,
+        }
+
+    # ------------------------------------------------------------------
+    # Developmental Forecasting (§13)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _forecast_development(
+        trajectory: TrajectoryObject,
+    ) -> dict[str, Any]:
+        """Estimate likely continuation, divergence, and branches."""
+        direction = trajectory.direction
+        rate = trajectory.rate_of_change
+        continuity = trajectory.historical_continuity
+
+        likely_continuation = direction if continuity >= 0.5 else ''
+
+        branches: list[str] = []
+        if rate > 0.5:
+            branches.append('acceleration')
+        if continuity < 0.5:
+            branches.append('divergence')
+        if trajectory.confidence < 0.3:
+            branches.append('uncertain')
+
+        risk_of_regression = max(0.0, 1.0 - continuity)
+
+        return {
+            'trajectory_id': trajectory.identifier,
+            'likely_continuation': likely_continuation,
+            'possible_divergence': not (continuity >= 0.7),
+            'alternative_branches': tuple(branches),
+            'potential_stabilization': direction == 'stabilizing',
+            'risk_of_regression': risk_of_regression,
+        }
+
+    # ------------------------------------------------------------------
+    # Growth Mapping (§15)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _map_growth(
+        trajectories: dict[str, TrajectoryObject],
+    ) -> dict[str, Any]:
+        """Maintain a longitudinal map of cognitive growth across dimensions."""
+        dimensions: dict[str, dict[str, Any]] = {}
+
+        for traj in trajectories.values():
+            ttype = traj.target_type
+            if ttype not in dimensions:
+                dimensions[ttype] = {
+                    'trajectory_count': 0,
+                    'avg_rate': 0.0,
+                    'directions': set(),
+                }
+            dim = dimensions[ttype]
+            dim['trajectory_count'] += 1
+            dim['avg_rate'] += traj.rate_of_change
+            dim['directions'].add(traj.direction)
+
+        summary: dict[str, Any] = {}
+        for dim_name, dim_data in dimensions.items():
+            count = dim_data['trajectory_count']
+            summary[dim_name] = {
+                'trajectory_count': count,
+                'avg_rate': dim_data['avg_rate'] / count if count else 0.0,
+                'directions': tuple(dim_data['directions']),
+            }
+
+        logger.info('cog.trajectory.growth_mapped', dimension_count=len(summary))
+        return summary
+
+    # ------------------------------------------------------------------
+    # Cognitive Transition Detection (§14)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_cognitive_transitions(
+        trajectories: dict[str, TrajectoryObject],
+    ) -> list[dict[str, Any]]:
+        """Detect narrative→belief and belief→identity transitions."""
+        transitions_found: list[dict[str, Any]] = []
+
+        type_map: dict[str, str] = {
+            'narrative': 'belief',
+            'belief': 'identity',
+        }
+
+        for traj in trajectories.values():
+            target = traj.target_cognitive_object
+            ttype = traj.target_type
+            next_type = type_map.get(ttype)
+
+            if next_type and traj.direction in ('strengthening', 'integrating'):
+                transitions_found.append({
+                    'trajectory_id': traj.identifier,
+                    'from_type': ttype,
+                    'to_type': next_type,
+                    'target_object': target,
+                    'evidence': traj.major_transitions,
+                })
+
+        logger.info('cog.trajectory.transitions_detected', count=len(transitions_found))
+        return transitions_found
+
 
 # ---------------------------------------------------------------------------
 # Helper functions

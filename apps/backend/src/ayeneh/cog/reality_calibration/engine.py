@@ -23,7 +23,9 @@ from ayeneh.cog.reality_calibration.types import (
     CALIBRATION_STATES,
     EVIDENCE_HIERARCHY,
     CalibrationObject,
+    EpistemicIntegrity,
     MentalStoryObject,
+    PredictionErrorObject,
 )
 
 logger = structlog.get_logger(__name__)
@@ -422,6 +424,182 @@ class RealityCalibrationEngine:
             + meta_factor * 0.3
         )
         return round(min(1.0, score), 4)
+
+    # ------------------------------------------------------------------
+    # Phase 7: Model Revision
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _revise_model(
+        calibration: CalibrationObject,
+        prediction_errors: list[PredictionErrorObject],
+    ) -> dict[str, Any]:
+        """Evaluate whether to strengthen, weaken, revise, split, merge, or archive a model.
+
+        Every revision preserves historical lineage.
+        """
+        action = 'strengthen'
+        reason = 'evidence supports current model'
+
+        if calibration.calibration_status == 'contradicted':
+            action = 'revise'
+            reason = 'calibration contradicted by evidence'
+        elif calibration.calibration_status == 'weakly_anchored':
+            action = 'weaken'
+            reason = 'weak evidence grounding'
+        elif calibration.evidence_level <= 2 and calibration.confidence >= 0.7:
+            action = 'strengthen'
+            reason = 'strong evidence and high confidence'
+        elif calibration.evidence_level >= 6:
+            action = 'archive'
+            reason = 'highly speculative or narrative-level evidence'
+
+        if len(prediction_errors) >= 3:
+            action = 'split'
+            reason = (
+                f"{len(prediction_errors)} prediction errors suggest "
+                f"multiple underlying models"
+            )
+
+        return {
+            'calibration_id': calibration.identifier,
+            'action': action,
+            'reason': reason,
+            'current_status': calibration.calibration_status,
+            'evidence_level': calibration.evidence_level,
+            'prediction_errors_count': len(prediction_errors),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 8: Epistemic Integrity Enforcement
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _enforce_epistemic_integrity(
+        calibration: CalibrationObject,
+    ) -> dict[str, Any]:
+        """Never present a higher epistemic layer as a lower one.
+
+        For example, a narrative must never be presented as an observed fact.
+        """
+        violations: list[str] = []
+
+        if calibration.evidence_level >= 6 and calibration.confidence >= 0.8:
+            violations.append(
+                f"High confidence ({calibration.confidence:.2f}) on "
+                f"weak evidence level ({calibration.evidence_level})"
+            )
+
+        if calibration.identity_involvement > 0.7 and calibration.evidence_level > 3:
+            violations.append(
+                f"Strong identity involvement ({calibration.identity_involvement:.2f}) "
+                f"with insufficient evidence level ({calibration.evidence_level})"
+            )
+
+        if calibration.prediction_involvement > 0.5 and calibration.evidence_level > 4:
+            violations.append(
+                f"Prediction-driven calibration ({calibration.prediction_involvement:.2f}) "
+                f"lacks direct evidence"
+            )
+
+        layer = EpistemicIntegrity.DIRECT_OBSERVATION
+        if calibration.evidence_level >= 7:
+            layer = EpistemicIntegrity.SPECULATIVE_POSSIBILITY
+        elif calibration.evidence_level >= 5:
+            layer = EpistemicIntegrity.PROBABLE_INFERENCE
+        elif calibration.evidence_level >= 3:
+            layer = EpistemicIntegrity.RELIABLE_EVIDENCE
+
+        return {
+            'calibration_id': calibration.identifier,
+            'determined_layer': layer.value,
+            'violations': violations,
+            'is_epistemically_honest': len(violations) == 0,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 9: Continuous Calibration
+    # ------------------------------------------------------------------
+
+    def _continuous_calibration(
+        self,
+        calibration_requests: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Subscription model for continuous calibration requests.
+
+        Processes calibration requests from memory, inference, prediction,
+        reflection, dialogue, and meta-cognition subsystems.
+        """
+        results: list[dict[str, Any]] = []
+
+        for request in calibration_requests:
+            source = request.get('source', 'unknown')
+            subject = request.get('subject', '')
+            evidence = request.get('evidence', ())
+
+            if not subject:
+                continue
+
+            matched_calibrations = [
+                cal for cal in self._calibrations.values()
+                if subject.lower() in cal.observed_event.lower()
+            ]
+
+            status = 'pending'
+            if matched_calibrations:
+                best = max(matched_calibrations, key=lambda c: c.confidence)
+                status = best.calibration_status
+
+            results.append({
+                'source': source,
+                'subject': subject,
+                'evidence_count': len(evidence) if isinstance(evidence, (list, tuple)) else 0,
+                'calibration_status': status,
+                'matched_calibrations': len(matched_calibrations),
+            })
+
+        logger.info(
+            'cog.reality_calibration.continuous_calibration',
+            request_count=len(calibration_requests),
+            results_count=len(results),
+        )
+        return results
+
+    # ------------------------------------------------------------------
+    # Phase 10: Calibration Explainability
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _explain_calibration(
+        calibration: CalibrationObject,
+        prediction_errors: list[PredictionErrorObject] | None = None,
+    ) -> dict[str, Any]:
+        """Generate mandatory explainability for a calibration result.
+
+        Answers: which observations initiated calibration, which predictions
+        failed, which evidence supported revision, competing interpretations,
+        confidence changes, and remaining uncertainty.
+        """
+        prediction_errors = prediction_errors or []
+
+        failed_predictions = [
+            pe.predicted_outcome for pe in prediction_errors
+            if pe.observed_outcome != pe.predicted_outcome
+        ]
+
+        competing = list(calibration.interpretations) if calibration.interpretations else []
+
+        return {
+            'calibration_id': calibration.identifier,
+            'initiating_observation': calibration.observed_event,
+            'failed_predictions': failed_predictions,
+            'supporting_evidence': list(calibration.available_evidence),
+            'competing_interpretations': competing,
+            'confidence': calibration.confidence,
+            'evidence_quality': calibration.evidence_quality,
+            'remaining_uncertainty': calibration.remaining_uncertainty,
+            'calibration_status': calibration.calibration_status,
+        }
 
     # ------------------------------------------------------------------
     # Helpers

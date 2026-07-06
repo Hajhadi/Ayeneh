@@ -22,9 +22,12 @@ from ayeneh.cog.meta_cognition.types import (
     META_COGNITIVE_LIFECYCLE_STATES,
     AWARENESS_LEVELS,
     AwarenessEvent,
+    CognitiveBias,
+    CognitiveResource,
     CognitiveTransparency,
     MetaCognitiveObject,
     ObserverEpisode,
+    RevisionStrategy,
 )
 
 logger = structlog.get_logger(__name__)
@@ -44,6 +47,16 @@ class MetaCognitionResult:
     de_identification: dict[str, Any]
     total_extracted: int
     processing_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    self_monitoring: dict[str, Any] = field(default_factory=dict)
+    detected_biases: tuple[str, ...] = ()
+    confidence_calibration: dict[str, Any] = field(default_factory=dict)
+    recommended_strategy: str = ''
+    resource_allocation: dict[str, Any] = field(default_factory=dict)
+    error_awareness: dict[str, Any] = field(default_factory=dict)
+    epistemic_governance: dict[str, Any] = field(default_factory=dict)
+    architecture_supervision: dict[str, Any] = field(default_factory=dict)
+    longitudinal_evaluation: dict[str, Any] = field(default_factory=dict)
+    governance_adaptation: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +82,23 @@ class MetaCognitionEngine:
         self._episodes: list[ObserverEpisode] = []
         self._awareness_tracker = AwarenessLevelTracker()
         self._de_id_tracker = DeIdentificationTracker()
+        self._bias_history: list[dict[str, Any]] = []
+        self._error_history: list[dict[str, Any]] = []
+        self._prediction_accuracy_history: list[float] = []
+        self._reflection_usefulness_history: list[float] = []
+        self._dialogue_continuity_history: list[float] = []
+        self._governance_policies: dict[str, Any] = {
+            'evidence_hierarchy_enforced': True,
+            'uncertainty_protection_active': True,
+            'premature_certainty_prevention': True,
+        }
+        self._resource_budgets: dict[str, float] = {
+            CognitiveResource.WORKING_MEMORY.value: 1.0,
+            CognitiveResource.INFERENCE_DEPTH.value: 1.0,
+            CognitiveResource.GRAPH_TRAVERSAL.value: 1.0,
+            CognitiveResource.REFLECTION_SCHEDULING.value: 1.0,
+            CognitiveResource.PREDICTION_COMPLEXITY.value: 1.0,
+        }
 
     # ------------------------------------------------------------------
     # Public API
@@ -106,12 +136,34 @@ class MetaCognitionEngine:
         transparency = self._estimate_transparency(narratives, beliefs, identity, reflections)
         de_id = self._track_de_identification(validated)
 
+        # Part 2 — self-evaluation and governance pipeline
+        self_monitoring = self._self_monitor(validated, reflections, narratives)
+        biases = self._detect_biases(validated, evidence)
+        calibr = self._calibrate_confidence(validated)
+        strategy = self._select_strategy(validated, calibr)
+        resources = self._manage_resources(validated)
+        errors = self._track_errors(validated, evidence, reflections)
+        governance = self._enforce_epistemic_governance(validated, evidence)
+        supervision = self._supervise_architecture(narratives, beliefs, identity, reflections)
+        longitudinal = self._self_evaluate_longitudinally()
+        adapt_gov = self._adapt_governance(longitudinal, governance)
+
         result = MetaCognitionResult(
             objects=tuple(validated),
             awareness_levels=levels,
             transparency=transparency,
             de_identification=de_id,
             total_extracted=len(validated),
+            self_monitoring=self_monitoring,
+            detected_biases=tuple(biases),
+            confidence_calibration=calibr,
+            recommended_strategy=strategy,
+            resource_allocation=resources,
+            error_awareness=errors,
+            epistemic_governance=governance,
+            architecture_supervision=supervision,
+            longitudinal_evaluation=longitudinal,
+            governance_adaptation=adapt_gov,
         )
 
         logger.info(
@@ -396,3 +448,449 @@ class MetaCognitionEngine:
                     meta_count += 1
                     break
         return min(1.0, meta_count * 0.2)
+
+    # ------------------------------------------------------------------
+    # Phase 8: Self-monitoring
+    # ------------------------------------------------------------------
+
+    def _self_monitor(
+        self,
+        objects: list[MetaCognitiveObject],
+        reflections: list[dict[str, Any]],
+        narratives: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Monitor memory retrieval, inference quality, dialogue quality,
+        prediction accuracy, reflection quality, reality calibration,
+        and decision support.
+        """
+        memory_retrieval = min(1.0, len(objects) * 0.15) if objects else 0.0
+        inference_quality = (
+            sum(o.reasoning_quality for o in objects) / len(objects)
+            if objects else 0.0
+        )
+        dialogue_quality = min(1.0, len(narratives) * 0.2) if narratives else 0.0
+        prediction_accuracy = (
+            self._prediction_accuracy_history[-1]
+            if self._prediction_accuracy_history else 0.0
+        )
+        reflection_quality = min(1.0, len(reflections) * 0.2) if reflections else 0.0
+        reality_calibration = (
+            sum(o.confidence_calibration for o in objects) / len(objects)
+            if objects else 0.0
+        )
+        decision_support = (inference_quality + reality_calibration) / 2
+
+        return {
+            'memory_retrieval_quality': round(memory_retrieval, 4),
+            'inference_quality': round(inference_quality, 4),
+            'dialogue_quality': round(dialogue_quality, 4),
+            'prediction_accuracy': round(prediction_accuracy, 4),
+            'reflection_quality': round(reflection_quality, 4),
+            'reality_calibration': round(reality_calibration, 4),
+            'decision_support': round(decision_support, 4),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 9: Bias detection
+    # ------------------------------------------------------------------
+
+    def _detect_biases(
+        self,
+        objects: list[MetaCognitiveObject],
+        evidence: list[dict[str, Any]],
+    ) -> list[str]:
+        """Detect cognitive biases: confirmation, availability, anchoring,
+        narrative bias, overgeneralization, premature closure, overconfidence.
+        """
+        detected: list[str] = []
+
+        evidence_count = len(evidence)
+        object_count = len(objects)
+
+        # Overconfidence: high confidence with low evidence
+        if objects:
+            avg_conf = sum(o.confidence for o in objects) / object_count
+            if avg_conf > 0.7 and evidence_count < 3:
+                detected.append(CognitiveBias.OVERCONFIDENCE.value)
+
+        # Premature closure: high confidence, low uncertainty
+        if objects:
+            avg_uncert = sum(o.remaining_uncertainty for o in objects) / object_count
+            avg_conf = sum(o.confidence for o in objects) / object_count
+            if avg_conf > 0.6 and avg_uncert < 0.2:
+                detected.append(CognitiveBias.PREMATURE_CLOSURE.value)
+
+        # Overgeneralization: few objects, high confidence
+        if object_count <= 2 and objects:
+            avg_conf = sum(o.confidence for o in objects) / object_count
+            if avg_conf > 0.5:
+                detected.append(CognitiveBias.OVERGENERALIZATION.value)
+
+        # Confirmation bias: low evidence diversity
+        all_evidence: set[str] = set()
+        for obj in objects:
+            all_evidence.update(obj.supporting_evidence)
+        if objects and len(all_evidence) < 2:
+            detected.append(CognitiveBias.CONFIRMATION.value)
+
+        # Narrative bias: strong narrative associations but weak evidence
+        if objects:
+            narr_count = sum(len(o.associated_narratives) for o in objects)
+            ev_count = sum(len(o.supporting_evidence) for o in objects)
+            if narr_count > ev_count and ev_count > 0:
+                detected.append(CognitiveBias.NARRATIVE_BIAS.value)
+
+        # Anchoring: all objects share similar awareness levels
+        if len(objects) >= 2:
+            levels = [o.awareness_level for o in objects]
+            if len(set(levels)) == 1:
+                detected.append(CognitiveBias.ANCHORING.value)
+
+        # Availability: recent evidence dominates
+        if objects:
+            recent_count = sum(
+                1 for obj in objects
+                if (datetime.now(UTC) - obj.creation_timestamp).days < 1
+            )
+            if recent_count > len(objects) * 0.8 and len(objects) > 1:
+                detected.append(CognitiveBias.AVAILABILITY.value)
+
+        self._bias_history.append({'biases': detected, 'count': len(detected)})
+        logger.info('cog.meta_cognition.biases_detected', biases=detected)
+        return detected
+
+    # ------------------------------------------------------------------
+    # Phase 10: Confidence calibration
+    # ------------------------------------------------------------------
+
+    def _calibrate_confidence(
+        self,
+        objects: list[MetaCognitiveObject],
+    ) -> dict[str, Any]:
+        """Evaluate whether confidence matches evidence."""
+        if not objects:
+            return {
+                'overall_calibration': 0.0,
+                'status': 'no_objects',
+                'too_high': 0,
+                'too_low': 0,
+                'well_calibrated': 0,
+            }
+
+        too_high = 0
+        too_low = 0
+        well_calibrated = 0
+
+        for obj in objects:
+            evidence_ratio = min(1.0, len(obj.supporting_evidence) * 0.25)
+            gap = obj.confidence - evidence_ratio
+            if gap > 0.2:
+                too_high += 1
+            elif gap < -0.2:
+                too_low += 1
+            else:
+                well_calibrated += 1
+
+        total = len(objects)
+        overall = well_calibrated / total if total else 0.0
+
+        return {
+            'overall_calibration': round(overall, 4),
+            'status': 'well_calibrated' if overall > 0.6 else 'needs_adjustment',
+            'too_high': too_high,
+            'too_low': too_low,
+            'well_calibrated': well_calibrated,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 11: Strategy selection
+    # ------------------------------------------------------------------
+
+    def _select_strategy(
+        self,
+        objects: list[MetaCognitiveObject],
+        calibration: dict[str, Any],
+    ) -> str:
+        """When quality decreases, select a revision strategy."""
+        if not objects:
+            return RevisionStrategy.REQUEST_CLARIFICATION.value
+
+        avg_quality = (
+            sum(o.reasoning_quality for o in objects) / len(objects)
+        )
+        status = calibration.get('status', '')
+
+        if status == 'needs_adjustment':
+            return RevisionStrategy.GENERATE_COMPETING_HYPOTHESES.value
+
+        if avg_quality < 0.3:
+            return RevisionStrategy.RETRIEVE_MORE_MEMORIES.value
+
+        too_high = calibration.get('too_high', 0)
+        if too_high > len(objects) * 0.5:
+            return RevisionStrategy.REDUCE_INFERENCE_DEPTH.value
+
+        if avg_quality < 0.5:
+            return RevisionStrategy.EXPAND_GRAPH_TRAVERSAL.value
+
+        return RevisionStrategy.DELAY_CONCLUSION.value
+
+    # ------------------------------------------------------------------
+    # Phase 12: Cognitive resource management
+    # ------------------------------------------------------------------
+
+    def _manage_resources(
+        self,
+        objects: list[MetaCognitiveObject],
+    ) -> dict[str, Any]:
+        """Allocate working memory, inference depth, graph traversal budget,
+        reflection scheduling, and prediction complexity.
+        """
+        if not objects:
+            return dict(self._resource_budgets)
+
+        complexity = min(1.0, len(objects) * 0.15)
+        avg_quality = sum(o.reasoning_quality for o in objects) / len(objects)
+
+        # Reduce inference depth when reasoning quality is low
+        if avg_quality < 0.3:
+            self._resource_budgets[CognitiveResource.INFERENCE_DEPTH.value] = max(
+                0.3, self._resource_budgets[CognitiveResource.INFERENCE_DEPTH.value] - 0.2,
+            )
+
+        # Increase graph traversal when evidence is sparse
+        total_evidence = sum(len(o.supporting_evidence) for o in objects)
+        if total_evidence < len(objects):
+            self._resource_budgets[CognitiveResource.GRAPH_TRAVERSAL.value] = min(
+                1.0, self._resource_budgets[CognitiveResource.GRAPH_TRAVERSAL.value] + 0.1,
+            )
+
+        # Scale working memory with complexity
+        self._resource_budgets[CognitiveResource.WORKING_MEMORY.value] = min(
+            1.0, 0.5 + complexity * 0.5,
+        )
+
+        return dict(self._resource_budgets)
+
+    # ------------------------------------------------------------------
+    # Phase 13: Error tracking
+    # ------------------------------------------------------------------
+
+    def _track_errors(
+        self,
+        objects: list[MetaCognitiveObject],
+        evidence: list[dict[str, Any]],
+        reflections: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Track possible sources of error: insufficient evidence,
+        incomplete context, weak retrieval, prediction uncertainty,
+        ambiguous language, hidden assumptions.
+        """
+        errors: list[str] = []
+
+        if not evidence:
+            errors.append('insufficient_evidence')
+
+        if not reflections:
+            errors.append('incomplete_context')
+
+        if objects:
+            avg_evidence = sum(len(o.supporting_evidence) for o in objects) / len(objects)
+            if avg_evidence < 1.0:
+                errors.append('weak_retrieval')
+
+            avg_uncertainty = sum(o.remaining_uncertainty for o in objects) / len(objects)
+            if avg_uncertainty > 0.5:
+                errors.append('prediction_uncertainty')
+
+            total_empty = sum(
+                1 for o in objects
+                if not o.awareness_description.strip()
+            )
+            if total_empty > len(objects) * 0.3:
+                errors.append('ambiguous_language')
+
+            # Hidden assumptions: high confidence, no supporting evidence
+            for obj in objects:
+                if obj.confidence > 0.5 and not obj.supporting_evidence:
+                    errors.append('hidden_assumptions')
+                    break
+
+        errors = list(dict.fromkeys(errors))  # deduplicate preserving order
+        self._error_history.append({'errors': errors, 'count': len(errors)})
+
+        return {
+            'detected_errors': errors,
+            'error_count': len(errors),
+            'has_critical': len(errors) >= 3,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 14: Epistemic governance
+    # ------------------------------------------------------------------
+
+    def _enforce_epistemic_governance(
+        self,
+        objects: list[MetaCognitiveObject],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Maintain evidence hierarchy, protect uncertainty,
+        prevent premature certainty.
+        """
+        violations: list[str] = []
+
+        # Evidence hierarchy
+        for obj in objects:
+            if obj.confidence > 0.8 and len(obj.supporting_evidence) == 0:
+                violations.append(
+                    f'evidence_hierarchy_violation:{obj.identifier}',
+                )
+
+        # Uncertainty protection
+        for obj in objects:
+            if obj.remaining_uncertainty == 0.0 and obj.confidence < 1.0:
+                violations.append(
+                    f'uncertainty_hidden:{obj.identifier}',
+                )
+
+        # Premature certainty prevention
+        for obj in objects:
+            if obj.confidence > 0.9 and obj.evidence_quality < 0.3:
+                violations.append(
+                    f'premature_certainty:{obj.identifier}',
+                )
+
+        return {
+            'evidence_hierarchy_enforced': self._governance_policies['evidence_hierarchy_enforced'],
+            'uncertainty_protection_active': self._governance_policies['uncertainty_protection_active'],
+            'premature_certainty_prevention': self._governance_policies['premature_certainty_prevention'],
+            'violations': violations,
+            'violation_count': len(violations),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 15: Architecture supervision
+    # ------------------------------------------------------------------
+
+    def _supervise_architecture(
+        self,
+        narratives: list[dict[str, Any]],
+        beliefs: list[dict[str, Any]],
+        identity: list[dict[str, Any]],
+        reflections: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Monitor Memory-Inference, Inference-Prediction,
+        Prediction-Reality, Reflection-Dialogue, Identity-Narrative
+        consistency.
+        """
+        memory_inference = min(1.0, (len(narratives) + len(beliefs)) * 0.15)
+        inference_prediction = min(1.0, len(reflections) * 0.2) if reflections else 0.0
+        prediction_reality = min(1.0, len(beliefs) * 0.2) if beliefs else 0.0
+        reflection_dialogue = min(1.0, len(reflections) * 0.25) if reflections else 0.0
+
+        # Identity-Narrative separation
+        identity_words: set[str] = set()
+        for ic in identity:
+            identity_words.update(ic.get('identity_statement', '').lower().split())
+        narrative_words: set[str] = set()
+        for narr in narratives:
+            narrative_words.update(narr.get('text', '').lower().split())
+        overlap = len(identity_words & narrative_words)
+        total = len(identity_words | narrative_words) if identity_words | narrative_words else 1
+        identity_narrative = 1.0 - (overlap / total)
+
+        overall = (
+            memory_inference * 0.25
+            + inference_prediction * 0.2
+            + prediction_reality * 0.2
+            + reflection_dialogue * 0.15
+            + identity_narrative * 0.2
+        )
+
+        return {
+            'memory_inference_consistency': round(memory_inference, 4),
+            'inference_prediction_consistency': round(inference_prediction, 4),
+            'prediction_reality_calibration': round(prediction_reality, 4),
+            'reflection_dialogue_timing': round(reflection_dialogue, 4),
+            'identity_narrative_separation': round(identity_narrative, 4),
+            'overall_architecture_health': round(min(1.0, overall), 4),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 16: Longitudinal self-evaluation
+    # ------------------------------------------------------------------
+
+    def _self_evaluate_longitudinally(self) -> dict[str, Any]:
+        """Evaluate prediction accuracy trends, reflection usefulness,
+        dialogue continuity over time.
+        """
+        prediction_trend = (
+            sum(self._prediction_accuracy_history[-10:]) / len(self._prediction_accuracy_history[-10:])
+            if self._prediction_accuracy_history else 0.0
+        )
+        reflection_trend = (
+            sum(self._reflection_usefulness_history[-10:]) / len(self._reflection_usefulness_history[-10:])
+            if self._reflection_usefulness_history else 0.0
+        )
+        dialogue_trend = (
+            sum(self._dialogue_continuity_history[-10:]) / len(self._dialogue_continuity_history[-10:])
+            if self._dialogue_continuity_history else 0.0
+        )
+
+        bias_trend = (
+            self._bias_history[-1]['count'] / 7  # normalise by max bias types
+            if self._bias_history else 0.0
+        )
+        error_trend = (
+            self._error_history[-1]['count'] / 6  # normalise by max error types
+            if self._error_history else 0.0
+        )
+
+        overall = (prediction_trend + reflection_trend + dialogue_trend) / 3
+
+        return {
+            'prediction_accuracy_trend': round(prediction_trend, 4),
+            'reflection_usefulness_trend': round(reflection_trend, 4),
+            'dialogue_continuity_trend': round(dialogue_trend, 4),
+            'bias_trend': round(bias_trend, 4),
+            'error_trend': round(error_trend, 4),
+            'overall_longitudinal_health': round(min(1.0, overall), 4),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 17: Adaptive governance
+    # ------------------------------------------------------------------
+
+    def _adapt_governance(
+        self,
+        longitudinal: dict[str, Any],
+        governance: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Governance policies evolve based on longitudinal evidence,
+        observed failures, and reasoning quality.
+        """
+        health = longitudinal.get('overall_longitudinal_health', 0.0)
+        violations = governance.get('violation_count', 0)
+
+        adaptations: list[str] = []
+
+        if health < 0.3:
+            self._governance_policies['evidence_hierarchy_enforced'] = True
+            self._governance_policies['uncertainty_protection_active'] = True
+            self._governance_policies['premature_certainty_prevention'] = True
+            adaptations.append('stricter_evidence_requirements')
+
+        if violations > 2:
+            self._governance_policies['premature_certainty_prevention'] = True
+            adaptations.append('enhanced_certainty_prevention')
+
+        if health > 0.7 and violations == 0:
+            adaptations.append('relaxed_governance_possible')
+
+        return {
+            'policies': dict(self._governance_policies),
+            'adaptations': adaptations,
+            'adaptation_count': len(adaptations),
+            'based_on_health': round(health, 4),
+            'based_on_violations': violations,
+        }

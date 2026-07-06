@@ -19,6 +19,8 @@ from ayeneh.cog.prediction.simulation import (
 )
 from ayeneh.cog.prediction.types import (
     PREDICTION_HORIZONS,
+    PredictionDomain,
+    PredictionHorizon,
     EarlyWarning,
     PredictionObject,
     PredictionResult,
@@ -365,6 +367,402 @@ class PredictiveCognitiveEngine:
 
         logger.info('cog.prediction.warnings_detected', count=len(warnings))
         return warnings
+
+    # ------------------------------------------------------------------
+    # Phase 6: Hypothesis Generation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _generate_hypotheses(
+        trajectories: list[dict[str, Any]],
+        patterns: list[dict[str, Any]],
+        current_state: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Generate hypotheses before scenario construction.
+
+        Each hypothesis is a testable proposition derived from trajectory
+        trends and pattern signals.
+        """
+        hypotheses: list[dict[str, Any]] = []
+
+        for traj in trajectories:
+            direction = traj.get('direction', 'stabilizing')
+            target_type = traj.get('target_type', 'belief')
+            rate = traj.get('rate_of_change', 0.0)
+            hypothesis_text = (
+                f"{target_type} will continue {direction} "
+                f"at approximately {rate:.2f} rate"
+            )
+            hypotheses.append({
+                'hypothesis_id': str(uuid.uuid4()),
+                'statement': hypothesis_text,
+                'supporting_trajectory': traj.get('id', ''),
+                'strength': min(1.0, rate + 0.2),
+            })
+
+        for pat in patterns:
+            conf = pat.get('confidence', 0.0)
+            hypothesis_text = (
+                f"Pattern '{pat.get('description', '')}' "
+                f"will persist with {conf:.2f} confidence"
+            )
+            hypotheses.append({
+                'hypothesis_id': str(uuid.uuid4()),
+                'statement': hypothesis_text,
+                'supporting_pattern': pat.get('id', ''),
+                'strength': conf,
+            })
+
+        logger.info('cog.prediction.hypotheses_generated', count=len(hypotheses))
+        return hypotheses
+
+    # ------------------------------------------------------------------
+    # Phase 7: Uncertainty Analysis
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _analyze_uncertainty(
+        prediction: PredictionObject,
+        trajectories: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Perform independent uncertainty estimation for a prediction.
+
+        Returns a breakdown of epistemic, aleatory, and model-form
+        uncertainty components.
+        """
+        epistemic_sources: list[str] = []
+        aleatory_sources: list[str] = []
+
+        if not trajectories:
+            epistemic_sources.append('no trajectory data available')
+
+        high_rate_count = sum(
+            1 for t in trajectories if t.get('rate_of_change', 0.0) > 0.7
+        )
+        if high_rate_count > 0:
+            aleatory_sources.append(
+                f"{high_rate_count} trajectory(s) with high rate of change"
+            )
+
+        conflicting = set()
+        for t in trajectories:
+            conflicting.add(t.get('direction', ''))
+        if len(conflicting) > 2:
+            aleatory_sources.append('multiple conflicting trajectory directions')
+
+        if not prediction.supporting_evidence:
+            epistemic_sources.append('no supporting evidence cited')
+
+        total_uncertainty = min(1.0, (
+            len(epistemic_sources) * 0.15
+            + len(aleatory_sources) * 0.2
+            + (1.0 - prediction.confidence)
+        ))
+
+        return {
+            'prediction_id': prediction.identifier,
+            'epistemic_uncertainty': epistemic_sources,
+            'aleatory_uncertainty': aleatory_sources,
+            'total_uncertainty': round(total_uncertainty, 4),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 8: Scenario Tree Construction
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_scenario_trees(
+        scenarios: list[ScenarioObject],
+        trajectories_analysis: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build tree-structured scenario branching from flat scenarios.
+
+        Returns a tree where each node is a scenario with child branches
+        representing further developments.
+        """
+        root: dict[str, Any] = {
+            'node_id': 'root',
+            'description': 'Current state',
+            'probability': 1.0,
+            'children': [],
+        }
+
+        dominant = trajectories_analysis.get('dominant_direction', 'stabilizing')
+
+        for scenario in scenarios:
+            branch: dict[str, Any] = {
+                'node_id': scenario.scenario_id,
+                'description': scenario.description,
+                'probability': scenario.probability,
+                'assumptions': scenario.assumptions,
+                'children': [],
+            }
+
+            if scenario.probability > 0.3:
+                sub_branch: dict[str, Any] = {
+                    'node_id': f"{scenario.scenario_id}-follow-on",
+                    'description': f"Follow-on from {dominant} continuation",
+                    'probability': scenario.probability * 0.5,
+                    'children': [],
+                }
+                branch['children'].append(sub_branch)
+
+            root['children'].append(branch)
+
+        return {
+            'tree': root,
+            'total_branches': len(root['children']),
+            'depth': 2,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 9: Prediction Validation (feedback loop)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_prediction(
+        prediction: PredictionObject,
+        observed_outcome: str = '',
+    ) -> dict[str, Any]:
+        """Compare predicted vs observed outcome for a prediction.
+
+        Returns a validation record with accuracy assessment and
+        corrective feedback.
+        """
+        is_confirmed = bool(observed_outcome)
+        accuracy: float = 0.0
+
+        if observed_outcome:
+            predicted_words = set(prediction.prediction_statement.lower().split())
+            observed_words = set(observed_outcome.lower().split())
+            overlap = predicted_words & observed_words
+            accuracy = min(1.0, len(overlap) / max(1, len(predicted_words))) if predicted_words else 0.0
+
+        return {
+            'prediction_id': prediction.identifier,
+            'predicted_statement': prediction.prediction_statement,
+            'observed_outcome': observed_outcome,
+            'accuracy': round(accuracy, 4),
+            'is_confirmed': is_confirmed,
+            'assumptions_evaluated': prediction.assumptions,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 10: Risk Modeling
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_risks(
+        trajectories: list[dict[str, Any]],
+        patterns: list[dict[str, Any]],
+        current_state: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Model behavioral and cognitive risks.
+
+        Risks include: behavioral stagnation, identity rigidity,
+        narrative reinforcement, and goal abandonment.
+        """
+        risks: list[dict[str, Any]] = []
+
+        stabilizing = sum(
+            1 for t in trajectories
+            if t.get('direction') == 'stabilizing'
+        )
+        if stabilizing >= 2:
+            risks.append({
+                'risk_id': str(uuid.uuid4()),
+                'type': 'behavioral_stagnation',
+                'description': (
+                    f"{stabilizing} trajectories are stabilizing, "
+                    f"indicating reduced cognitive flexibility"
+                ),
+                'severity': min(1.0, stabilizing * 0.25),
+            })
+
+        identity_trajs = [
+            t for t in trajectories if t.get('target_type') == 'identity'
+        ]
+        rigid = [t for t in identity_trajs if t.get('direction') == 'strengthening']
+        if rigid:
+            risks.append({
+                'risk_id': str(uuid.uuid4()),
+                'type': 'identity_rigidity',
+                'description': (
+                    f"{len(rigid)} identity trajectory(ies) strengthening "
+                    f"without corresponding change"
+                ),
+                'severity': min(1.0, len(rigid) * 0.3),
+            })
+
+        high_conf_patterns = [
+            p for p in patterns if p.get('confidence', 0.0) > 0.8
+        ]
+        if len(high_conf_patterns) >= 2:
+            risks.append({
+                'risk_id': str(uuid.uuid4()),
+                'type': 'narrative_reinforcement',
+                'description': (
+                    f"{len(high_conf_patterns)} high-confidence patterns "
+                    f"may reinforce existing narratives"
+                ),
+                'severity': min(1.0, len(high_conf_patterns) * 0.2),
+            })
+
+        goals = current_state.get('goals', [])
+        if goals:
+            inactive = [
+                g for g in goals
+                if g.get('status') in ('abandoned', 'stalled', 'inactive')
+            ]
+            if inactive:
+                risks.append({
+                    'risk_id': str(uuid.uuid4()),
+                    'type': 'goal_abandonment',
+                    'description': (
+                        f"{len(inactive)} goal(s) appear abandoned or stalled"
+                    ),
+                    'severity': min(1.0, len(inactive) * 0.3),
+                })
+
+        logger.info('cog.prediction.risks_modeled', count=len(risks))
+        return risks
+
+    # ------------------------------------------------------------------
+    # Phase 11: Opportunity Modeling
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_opportunities(
+        trajectories: list[dict[str, Any]],
+        patterns: list[dict[str, Any]],
+        current_state: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Model positive developmental opportunities.
+
+        Opportunities include: emerging capacity, reflective ability,
+        habit strengthening, and identity integration.
+        """
+        opportunities: list[dict[str, Any]] = []
+
+        growing = [
+            t for t in trajectories
+            if t.get('direction') in ('strengthening', 'transforming')
+            and t.get('rate_of_change', 0.0) > 0.3
+        ]
+        if growing:
+            opportunities.append({
+                'opportunity_id': str(uuid.uuid4()),
+                'type': 'emerging_capacity',
+                'description': (
+                    f"{len(growing)} trajectory(ies) showing accelerating growth"
+                ),
+                'potential': min(1.0, sum(
+                    t.get('rate_of_change', 0.0) for t in growing
+                ) / len(growing)),
+            })
+
+        meta_patterns = [
+            p for p in patterns
+            if any(kw in p.get('description', '').lower()
+                   for kw in ('reflect', 'meta', 'awareness', 'insight'))
+        ]
+        if meta_patterns:
+            opportunities.append({
+                'opportunity_id': str(uuid.uuid4()),
+                'type': 'reflective_ability',
+                'description': (
+                    f"{len(meta_patterns)} meta-cognitive pattern(s) detected"
+                ),
+                'potential': min(1.0, sum(
+                    p.get('confidence', 0.0) for p in meta_patterns
+                ) / len(meta_patterns)),
+            })
+
+        habit_trajs = [
+            t for t in trajectories
+            if t.get('target_type') == 'habit'
+            and t.get('direction') == 'strengthening'
+        ]
+        if habit_trajs:
+            opportunities.append({
+                'opportunity_id': str(uuid.uuid4()),
+                'type': 'habit_strengthening',
+                'description': (
+                    f"{len(habit_trajs)} habit trajectory(ies) strengthening"
+                ),
+                'potential': min(1.0, sum(
+                    t.get('rate_of_change', 0.0) for t in habit_trajs
+                ) / len(habit_trajs)),
+            })
+
+        identity_trajs = [
+            t for t in trajectories
+            if t.get('target_type') == 'identity'
+            and t.get('direction') == 'integrating'
+        ]
+        if identity_trajs:
+            opportunities.append({
+                'opportunity_id': str(uuid.uuid4()),
+                'type': 'identity_integration',
+                'description': (
+                    f"{len(identity_trajs)} identity trajectory(ies) integrating"
+                ),
+                'potential': min(1.0, sum(
+                    t.get('rate_of_change', 0.0) for t in identity_trajs
+                ) / len(identity_trajs)),
+            })
+
+        logger.info('cog.prediction.opportunities_modeled', count=len(opportunities))
+        return opportunities
+
+    # ------------------------------------------------------------------
+    # Phase 12: Decision Support Generation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _generate_decision_support(
+        predictions: dict[str, PredictionObject],
+        risks: list[dict[str, Any]],
+        opportunities: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Generate decision support output from predictions, risks, and opportunities.
+
+        Returns consequences, opportunities, risks, alternatives, and
+        critical uncertainties to support informed decision making.
+        """
+        consequences: list[str] = []
+        for pred in predictions.values():
+            if pred.probability > 0.5:
+                consequences.append(pred.prediction_statement)
+
+        opp_summaries = [
+            f"{o['type']}: {o['description']}" for o in opportunities
+        ]
+
+        risk_summaries = [
+            f"{r['type']}: {r['description']}" for r in risks
+        ]
+
+        alternatives: list[str] = []
+        for pred in predictions.values():
+            if pred.probability < 0.5:
+                alternatives.append(pred.prediction_statement)
+
+        critical_uncertainties: list[str] = []
+        for pred in predictions.values():
+            if pred.confidence < 0.4:
+                critical_uncertainties.append(
+                    f"Low confidence ({pred.confidence:.2f}) "
+                    f"on: {pred.prediction_statement}"
+                )
+
+        return {
+            'consequences': consequences,
+            'opportunities': opp_summaries,
+            'risks': risk_summaries,
+            'alternatives': alternatives,
+            'critical_uncertainties': critical_uncertainties,
+        }
 
 
 # ---------------------------------------------------------------------------

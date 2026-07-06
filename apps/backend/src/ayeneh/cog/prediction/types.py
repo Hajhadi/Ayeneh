@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 
@@ -22,6 +23,35 @@ PREDICTION_HORIZONS: list[str] = [
 PREDICTION_LIFECYCLE_STATES: list[str] = [
     'candidate', 'validated', 'confirmed', 'refuted', 'revised', 'historical',
 ]
+
+
+# ---------------------------------------------------------------------------
+# Domain and horizon enums
+# ---------------------------------------------------------------------------
+
+class PredictionDomain(str, Enum):
+    """Domains in which predictions can be made."""
+
+    BEHAVIOR = 'behavior'
+    LEARNING = 'learning'
+    PROJECTS = 'projects'
+    DECISION_MAKING = 'decision_making'
+    IDENTITY_EVOLUTION = 'identity_evolution'
+    NARRATIVE_EVOLUTION = 'narrative_evolution'
+    GOAL_COMPLETION = 'goal_completion'
+    HABITFORMATION = 'habit_formation'
+    REALITY_CALIBRATION = 'reality_calibration'
+    META_COGNITIVE_DEVELOPMENT = 'meta_cognitive_development'
+
+
+class PredictionHorizon(str, Enum):
+    """Temporal horizons for predictions."""
+
+    IMMEDIATE = 'immediate'
+    SHORT_TERM = 'short_term'
+    MEDIUM_TERM = 'medium_term'
+    LONG_TERM = 'long_term'
+    LIFETIME = 'lifetime'
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +75,9 @@ class PredictionObject:
     supporting_evidence: tuple[str, ...] = ()
     contradictory_evidence: tuple[str, ...] = ()
     prediction_horizon: str = ''  # next_conversation|current_project|weeks|months|years
+    underlying_trajectories: tuple[str, ...] = ()
+    active_hypotheses: tuple[str, ...] = ()
+    risk_factors: tuple[str, ...] = ()
     creation_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     revision_history: tuple[dict[str, Any], ...] = ()
     specification_version: str = '1.0.0'

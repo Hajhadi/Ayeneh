@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 
@@ -32,6 +33,19 @@ VALIDATION_METHODS: list[str] = [
     'changed_language', 'behavior_change',
     'narrative_revision', 'belief_revision',
 ]
+
+
+class ReflectionCategory(str, Enum):
+    BEHAVIORAL = 'behavioral'
+    IDENTITY = 'identity'
+    NARRATIVE = 'narrative'
+    REALITY = 'reality'
+    GOAL = 'goal'
+    RELATIONSHIP = 'relationship'
+    DECISION = 'decision'
+    LEARNING = 'learning'
+    DEVELOPMENTAL = 'developmental'
+    META_COGNITIVE = 'meta_cognitive'
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +76,13 @@ class ReflectionObject:
     creation_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     revision_history: tuple[dict[str, Any], ...] = ()
     specification_version: str = '1.0.0'
+    associated_episodes: tuple[str, ...] = ()
+    associated_behaviors: tuple[str, ...] = ()
+    associated_identity: tuple[str, ...] = ()
+    associated_goals: tuple[str, ...] = ()
+    developmental_importance: float = 0.0
+    recommended_actions: tuple[str, ...] = ()
+    open_questions: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------

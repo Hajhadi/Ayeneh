@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 
@@ -17,16 +18,27 @@ from typing import Any
 
 TARGET_TYPES: list[str] = [
     'belief', 'value', 'goal', 'identity', 'narrative', 'pattern',
+    'project', 'learning_domain', 'meta_cognitive', 'relationship',
 ]
 
 DIRECTION_TYPES: list[str] = [
     'strengthening', 'weakening', 'stabilizing',
     'fragmenting', 'integrating', 'transforming',
+    'emerging', 'disappearing',
 ]
 
 TRAJECTORY_LIFECYCLE_STATES: list[str] = [
     'candidate', 'emerging', 'validated', 'canonical', 'historical',
 ]
+
+
+class ObservationWindow(str, Enum):
+    CONVERSATION = 'conversation'
+    WEEK = 'week'
+    MONTH = 'month'
+    PROJECT = 'project'
+    LIFE_CHAPTER = 'life_chapter'
+    ENTIRE_HISTORY = 'entire_interaction_history'
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +66,10 @@ class TrajectoryObject:
     lifecycle_state: str = 'candidate'
     creation_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     specification_version: str = '1.0.0'
+    observation_window: str = 'conversation'
+    stability: float = 0.0
+    associated_reflections: tuple[str, ...] = ()
+    predicted_future_direction: str = ''
 
 
 # ---------------------------------------------------------------------------

@@ -455,6 +455,255 @@ class ReflectionEngine:
         """Detect cognitive structures absent from awareness."""
         return self._blind_spot_detector.detect(evidence, patterns, identity)
 
+    # ------------------------------------------------------------------
+    # Narrative Deconstruction (§13)
+    # ------------------------------------------------------------------
+
+    def _analyze_narratives(
+        self,
+        narratives: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Deconstruct narratives through staged analysis.
+
+        Maps the progression: Events → Interpretations → Repeated Interpretations
+        → Narrative Formation → Identity Integration → Behavioral Reinforcement
+        → Reality Distortion.
+        """
+        results: list[dict[str, Any]] = []
+        for narrative in narratives:
+            narr_id = narrative.get('id', '')
+            narr_text = narrative.get('text', '')
+            theme = narrative.get('theme', '')
+
+            supporting = [
+                ev.get('id', '') for ev in evidence
+                if _text_overlap(ev.get('text', ''), narr_text)
+            ]
+
+            results.append({
+                'narrative_id': narr_id,
+                'theme': theme,
+                'stage': 'narrative_formation',
+                'supporting_evidence': tuple(supporting),
+                'supporting_count': len(supporting),
+                'contradicting_count': 0,
+            })
+
+        logger.info('cog.reflection.narratives_analyzed', count=len(results))
+        return results
+
+    # ------------------------------------------------------------------
+    # Identity Reflection (§8)
+    # ------------------------------------------------------------------
+
+    def _analyze_identity(
+        self,
+        identity: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Reconstruct the evolving self-model from identity components."""
+        results: list[dict[str, Any]] = []
+        for ident in identity:
+            ident_id = ident.get('id', '')
+            ident_stmt = ident.get('statement', '')
+            domain = ident.get('domain', '')
+
+            linked = [
+                ev.get('id', '') for ev in evidence
+                if _text_overlap(ev.get('text', ''), ident_stmt)
+            ]
+
+            results.append({
+                'identity_id': ident_id,
+                'statement': ident_stmt,
+                'domain': domain,
+                'supporting_evidence': tuple(linked),
+                'stability': min(1.0, len(linked) * 0.25),
+            })
+
+        logger.info('cog.reflection.identity_analyzed', count=len(results))
+        return results
+
+    # ------------------------------------------------------------------
+    # Reality Calibration Integration (§14)
+    # ------------------------------------------------------------------
+
+    def _calibrate_reality(
+        self,
+        reflections: dict[str, ReflectionObject],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, float]:
+        """Estimate confidence adjustments based on evidence alignment."""
+        adjustments: dict[str, float] = {}
+        for ref_id, ref in reflections.items():
+            support_count = len(ref.supporting_evidence)
+            contra_count = len(ref.contradictory_evidence)
+            total = support_count + contra_count
+            if total > 0:
+                adjustments[ref_id] = (support_count - contra_count) / total
+            else:
+                adjustments[ref_id] = 0.0
+        return adjustments
+
+    # ------------------------------------------------------------------
+    # Dialogue Planning (§3 pipeline end)
+    # ------------------------------------------------------------------
+
+    def _plan_dialogue(
+        self,
+        reflections: dict[str, ReflectionObject],
+    ) -> list[dict[str, Any]]:
+        """Generate dialogue planning output from reflections."""
+        plans: list[dict[str, Any]] = []
+        for ref_id, ref in reflections.items():
+            if ref.confidence >= 0.3:
+                plans.append({
+                    'reflection_id': ref_id,
+                    'statement': ref.reflection_statement,
+                    'suggested_approach': 'share_with_context',
+                    'confidence': ref.confidence,
+                })
+        logger.info('cog.reflection.dialogue_planned', count=len(plans))
+        return plans
+
+    # ------------------------------------------------------------------
+    # Threshold Gating (§11)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_threshold(
+        evidence: list[dict[str, Any]],
+        patterns: list[dict[str, Any]],
+    ) -> float:
+        """Estimate whether sufficient evidence has accumulated for reflection.
+
+        Considers evidence quantity, diversity, and behavioral repetition.
+        """
+        quantity = min(1.0, len(evidence) / 10.0)
+
+        categories = {ev.get('category', 'general') for ev in evidence}
+        diversity = min(1.0, len(categories) * 0.25)
+
+        pattern_freq = sum(p.get('frequency', 1) for p in patterns)
+        repetition = min(1.0, pattern_freq / 10.0)
+
+        return (quantity * 0.4 + diversity * 0.3 + repetition * 0.3)
+
+    # ------------------------------------------------------------------
+    # Narrative-to-Reality Mapping (§14)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _map_narrative_to_reality(
+        narrative: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Compare a narrative against observable evidence."""
+        narr_text = narrative.get('text', '')
+        supporting: list[str] = []
+        contradicting: list[str] = []
+
+        for ev in evidence:
+            ev_text = ev.get('text', '')
+            ev_id = ev.get('id', '')
+            if _text_overlap(ev_text, narr_text):
+                supporting.append(ev_id)
+
+        contexts_appears = len(supporting)
+        contexts_missing = max(0, len(evidence) - contexts_appears)
+
+        return {
+            'narrative_id': narrative.get('id', ''),
+            'supporting_evidence': tuple(supporting),
+            'contradicting_evidence': tuple(contradicting),
+            'missing_evidence_count': contexts_missing,
+            'contexts_appears': contexts_appears,
+            'contexts_missing': contexts_missing,
+        }
+
+    # ------------------------------------------------------------------
+    # Identity Integration (§15)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _integrate_identity(
+        identity_components: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Seek higher-order integration of apparently contradictory identities."""
+        if not identity_components:
+            return {'integrated': False, 'components': (), 'contradictions': ()}
+
+        domains: dict[str, list[dict[str, Any]]] = {}
+        for comp in identity_components:
+            domain = comp.get('domain', 'general')
+            domains.setdefault(domain, []).append(comp)
+
+        contradictions: list[tuple[str, str]] = []
+        for domain, comps in domains.items():
+            if len(comps) > 1:
+                for i in range(len(comps)):
+                    for j in range(i + 1, len(comps)):
+                        contradictions.append((
+                            comps[i].get('id', ''),
+                            comps[j].get('id', ''),
+                        ))
+
+        return {
+            'integrated': len(contradictions) > 0,
+            'components': tuple(c.get('id', '') for c in identity_components),
+            'contradictions': tuple(contradictions),
+            'domain_count': len(domains),
+        }
+
+    # ------------------------------------------------------------------
+    # Developmental Synthesis (§16)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _synthesize_developmental(
+        reflections: dict[str, ReflectionObject],
+        identity_analysis: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Synthesize accumulated reflections into broader developmental models."""
+        strengths: list[str] = []
+        challenges: list[str] = []
+
+        for ref in reflections.values():
+            if ref.confidence >= 0.5:
+                strengths.append(ref.reflection_statement)
+            elif ref.confidence > 0.0:
+                challenges.append(ref.reflection_statement)
+
+        return {
+            'emerging_strengths': tuple(strengths),
+            'persistent_challenges': tuple(challenges),
+            'identity_components_count': len(identity_analysis),
+            'developmental_importance': max(
+                (r.developmental_importance for r in reflections.values()),
+                default=0.0,
+            ),
+        }
+
+    # ------------------------------------------------------------------
+    # Reflection Explainability (§18)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _explain_reflection(ref: ReflectionObject) -> dict[str, Any]:
+        """Generate mandatory explainability output for a reflection."""
+        return {
+            'reflection_id': ref.identifier,
+            'why_generated': ref.reflection_statement,
+            'supporting_evidence': ref.supporting_evidence,
+            'supporting_patterns': ref.supporting_patterns,
+            'supporting_narratives': ref.supporting_narratives,
+            'supporting_beliefs': ref.supporting_beliefs,
+            'identity_components_involved': ref.associated_identity,
+            'confidence': ref.confidence,
+            'open_questions': ref.open_questions,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Helper functions
