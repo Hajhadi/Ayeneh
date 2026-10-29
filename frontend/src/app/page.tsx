@@ -60,7 +60,7 @@ export default function HomePage() {
           <span>Ayeneh</span>
         </a>
         <div className="mirror-topbar-actions">
-          <div className="mirror-status"><i /> private by design</div>
+          <div className="mirror-status"><i /> on-device memory</div>
           <Link href="/settings" className="mirror-settings-link" aria-label="Model and app settings"><Settings2 size={18} /></Link>
         </div>
       </header>

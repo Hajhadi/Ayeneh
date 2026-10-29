@@ -24,8 +24,10 @@ hard-coded SQLite path. The current Python pipeline still needs a running
 service for web responses, and other legacy screens still call that service.
 On Android, Chat can instead call an OpenAI-compatible cloud model directly.
 The API key is encrypted by Android Keystore and stays in the app's private
-storage. JavaScript sends only the prompt to the native bridge; the bridge adds
-the key to the HTTPS request. Chat data backups deliberately omit model keys.
+storage. During setup, the key passes through the settings form and native bridge
+once; the form clears after saving. Later, JavaScript sends only the prompt and
+context to the native bridge, which adds the key to the HTTPS request. Chat data
+backups deliberately omit model keys.
 Custom URLs should be trusted because the selected provider receives the key
 and the prompt. A compromised or rooted device can still expose runtime secrets.
 The legacy library, pattern, and reflection screens have not yet been migrated

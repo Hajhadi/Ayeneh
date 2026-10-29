@@ -166,6 +166,10 @@ body {
 .app-main input::placeholder, .app-main textarea::placeholder { color: rgba(218,213,238,.34) !important; }
 .app-main button:not([disabled]):hover { border-color: rgba(168,148,255,.38); }
 .app-sidebar { position: relative; z-index: 3; border-color: rgba(255,255,255,.08) !important; background: linear-gradient(180deg, rgba(17,16,29,.98), rgba(8,8,15,.99)) !important; }
+@media (max-width: 760px) {
+  .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; }
+  .app-main { width: 100%; }
+}
 .app-sidebar::after { position: absolute; top: 95px; left: 0; width: 1px; height: 190px; background: linear-gradient(#907cff, transparent); opacity: .65; content: ''; }
 .nav-item { color: rgba(225,221,242,.47); }
 .nav-item-active { color: #e2dcff !important; border-color: rgba(167,139,250,.17) !important; background: linear-gradient(90deg, rgba(124,58,237,.2), rgba(124,58,237,.035)) !important; box-shadow: inset 3px 0 #947fff, 0 5px 20px rgba(63,44,160,.1); }

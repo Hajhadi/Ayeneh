@@ -7,6 +7,7 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "ir.ayeneh.app"
+        manifestPlaceholders = [appLabel: "Ayeneh"]
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode = Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
@@ -33,6 +34,7 @@ android {
         debug {
             applicationIdSuffix ".preview"
             versionNameSuffix "-preview"
+            manifestPlaceholders = [appLabel: "Ayeneh Preview"]
             if (previewKeystorePath) signingConfig signingConfigs.preview
         }
         release {
