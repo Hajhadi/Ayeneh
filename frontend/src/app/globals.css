@@ -106,6 +106,18 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea {
   from { opacity: 0; transform: scale(0.8); }
   to { opacity: 1; transform: scale(1); }
 }
+@keyframes landingRise {
+  from { transform: translateY(26px); filter: blur(3px); }
+  to { transform: translateY(0); filter: blur(0); }
+}
+@keyframes landingScale {
+  from { transform: scale(.84); filter: blur(3px); }
+  to { transform: scale(1); filter: blur(0); }
+}
+@keyframes landingAppear {
+  from { filter: blur(3px); }
+  to { filter: blur(0); }
+}
 @keyframes gradientShift {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -165,40 +177,40 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea {
 
 /* ── Landing staggered animations ── */
 .landing-logo {
-  opacity: 0 !important;
-  animation: scaleIn 0.6s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingScale 0.6s ease-out forwards !important;
 }
 .landing-title {
-  opacity: 0 !important;
-  animation: fadeInUp 0.6s 0.15s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.6s 0.15s ease-out both !important;
 }
 .landing-subtitle {
-  opacity: 0 !important;
-  animation: fadeIn 0.5s 0.3s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingAppear 0.5s 0.3s ease-out both !important;
 }
 .landing-desc {
-  opacity: 0 !important;
-  animation: fadeInUp 0.6s 0.45s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.6s 0.45s ease-out both !important;
 }
 .landing-tag-1 {
-  opacity: 0 !important;
-  animation: fadeInUp 0.5s 0.55s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.5s 0.55s ease-out both !important;
 }
 .landing-tag-2 {
-  opacity: 0 !important;
-  animation: fadeInUp 0.5s 0.65s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.5s 0.65s ease-out both !important;
 }
 .landing-tag-3 {
-  opacity: 0 !important;
-  animation: fadeInUp 0.5s 0.75s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.5s 0.75s ease-out both !important;
 }
 .landing-input {
-  opacity: 0 !important;
-  animation: fadeInUp 0.6s 0.9s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingRise 0.6s 0.9s ease-out both !important;
 }
 .landing-footer {
-  opacity: 0 !important;
-  animation: fadeIn 0.5s 1.1s ease-out forwards !important;
+  opacity: 1 !important;
+  animation: landingAppear 0.5s 1.1s ease-out both !important;
 }
 
 .animate-gradient { background-size: 400% 400%; animation: gradientShift 20s ease infinite; }
@@ -220,18 +232,18 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea {
   .landing-tag-3,
   .landing-input,
   .landing-footer {
-    opacity: 0 !important;
+    opacity: 1 !important;
   }
 
-  .landing-logo { animation: scaleIn .6s ease-out forwards !important; }
-  .landing-title { animation: fadeInUp .6s .15s ease-out forwards !important; }
-  .landing-subtitle { animation: fadeIn .5s .3s ease-out forwards !important; }
-  .landing-desc { animation: fadeInUp .6s .45s ease-out forwards !important; }
-  .landing-tag-1 { animation: fadeInUp .5s .55s ease-out forwards !important; }
-  .landing-tag-2 { animation: fadeInUp .5s .65s ease-out forwards !important; }
-  .landing-tag-3 { animation: fadeInUp .5s .75s ease-out forwards !important; }
-  .landing-input { animation: fadeInUp .6s .9s ease-out forwards !important; }
-  .landing-footer { animation: fadeIn .5s 1.1s ease-out forwards !important; }
+  .landing-logo { animation: landingScale .6s ease-out both !important; }
+  .landing-title { animation: landingRise .6s .15s ease-out both !important; }
+  .landing-subtitle { animation: landingAppear .5s .3s ease-out both !important; }
+  .landing-desc { animation: landingRise .6s .45s ease-out both !important; }
+  .landing-tag-1 { animation: landingRise .5s .55s ease-out both !important; }
+  .landing-tag-2 { animation: landingRise .5s .65s ease-out both !important; }
+  .landing-tag-3 { animation: landingRise .5s .75s ease-out both !important; }
+  .landing-input { animation: landingRise .6s .9s ease-out both !important; }
+  .landing-footer { animation: landingAppear .5s 1.1s ease-out both !important; }
   .landing-bg { animation: gradientShift 20s ease infinite !important; }
   .orb.animate-float { animation: float 8s ease-in-out infinite !important; }
   .orb.animate-float-2 { animation: float2 10s ease-in-out infinite !important; }
