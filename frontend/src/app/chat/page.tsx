@@ -17,15 +17,16 @@ export default function ChatPage() {
     activeConversationId, messages: storeMessages,
     isStreaming, streamingContent, setMessages, setActiveConversation,
     thinkingSteps, thinkingComplete, thinkingTotalMs,
+    chatError,
   } = useChatStore();
   const { sendMessage, cancelStream } = useStreamChat();
   const { data: messagesData } = useConversationMessages(activeConversationId);
 
   useEffect(() => {
-    if (messagesData?.data && messagesData.data.length > 0) {
+    if (messagesData?.data && !isStreaming) {
       setMessages(messagesData.data);
     }
-  }, [messagesData, setMessages]);
+  }, [messagesData, isStreaming, setMessages]);
 
   const onSelect = useCallback((id: string) => {
     if (isStreaming) cancelStream();
@@ -170,6 +171,12 @@ export default function ChatPage() {
           thinkingComplete={thinkingComplete}
           thinkingTotalMs={thinkingTotalMs}
         />
+
+        {chatError && (
+          <p role="alert" className="mx-5 mb-2 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-2 text-sm text-red-200">
+            {chatError}
+          </p>
+        )}
 
         {/* Input */}
         <MessageInput onSend={sendMessage} onCancel={cancelStream} isStreaming={isStreaming} />

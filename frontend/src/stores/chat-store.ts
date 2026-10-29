@@ -16,6 +16,7 @@ interface ChatState {
   isStreaming: boolean;
   streamingContent: string;
   streamingMessageId: string | null;
+  chatError: string | null;
   thinkingSteps: ThinkingStep[];
   thinkingComplete: boolean;
   thinkingTotalMs: number;
@@ -30,6 +31,7 @@ interface ChatState {
     conversationId?: string | null,
   ) => void;
   finalizeStream: (message: Message) => void;
+  setChatError: (message: string | null) => void;
   addThinkingStep: (step: ThinkingStep) => void;
   setThinkingComplete: (totalMs: number) => void;
   resetThinking: () => void;
@@ -42,6 +44,7 @@ export const useChatStore = create<ChatState>((set) => ({
   isStreaming: false,
   streamingContent: '',
   streamingMessageId: null,
+  chatError: null,
   thinkingSteps: [],
   thinkingComplete: false,
   thinkingTotalMs: 0,
@@ -73,7 +76,10 @@ export const useChatStore = create<ChatState>((set) => ({
       isStreaming: false,
       streamingContent: '',
       streamingMessageId: null,
+      chatError: null,
     })),
+
+  setChatError: (chatError) => set({ chatError }),
 
   addThinkingStep: (step) =>
     set((state) => {
@@ -104,6 +110,7 @@ export const useChatStore = create<ChatState>((set) => ({
       isStreaming: false,
       streamingContent: '',
       streamingMessageId: null,
+      chatError: null,
       thinkingSteps: [],
       thinkingComplete: false,
       thinkingTotalMs: 0,

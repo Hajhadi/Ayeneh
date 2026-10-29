@@ -43,6 +43,8 @@ export interface SendMessageRequest {
 export interface StreamMessageRequest {
   content: string;
   conversation_id?: string;
+  conversation_history?: { role: 'user' | 'assistant'; content: string }[];
+  memory_context?: string;
 }
 
 export interface SSEMessageStart {
@@ -67,6 +69,6 @@ export interface SSEMessageEnd {
 export interface StreamCallbacks {
   onStart: (data: SSEMessageStart) => void;
   onDelta: (data: SSEContentDelta) => void;
-  onEnd: (data: SSEMessageEnd) => void;
+  onEnd: (data: SSEMessageEnd) => void | Promise<void>;
   onError: (error: Error) => void;
 }

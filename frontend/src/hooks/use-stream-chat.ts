@@ -1,11 +1,16 @@
 import { useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/stores/chat-store';
 import { ConversationStreamClient } from '@/lib/stream-client';
+import { buildLocalPromptContext } from '@/lib/local-context';
+import { saveLocalMessage } from '@/lib/local-data';
 import { useCreateConversation } from './use-create-conversation';
 import type { Message } from '@/types/conversation';
 
 export function useStreamChat() {
   const streamClient = useRef<ConversationStreamClient | null>(null);
+  const sending = useRef(false);
+  const queryClient = useQueryClient();
   const createConversation = useCreateConversation();
   const {
     activeConversationId,
@@ -15,11 +20,16 @@ export function useStreamChat() {
     setStreaming,
     updateStreamingContent,
     finalizeStream,
+    setChatError,
   } = useChatStore();
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (isStreaming || !content.trim()) return;
+      if (sending.current || isStreaming || !content.trim()) return;
+      sending.current = true;
+      setChatError(null);
+
+      try {
 
       let convId = activeConversationId;
 
@@ -40,7 +50,12 @@ export function useStreamChat() {
         token_count: null,
         created_at: new Date().toISOString(),
       };
+      await saveLocalMessage(userMessage);
       appendMessage(userMessage);
+      await queryClient.invalidateQueries({ queryKey: ['messages', convId] });
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
+      const promptContext = await buildLocalPromptContext(convId, content.trim());
 
       setStreaming(true, null, convId);
 
@@ -51,7 +66,7 @@ export function useStreamChat() {
       let accumulated = '';
 
       await streamClient.current.start(
-        { content: content.trim(), conversation_id: convId },
+        { content: content.trim(), conversation_id: convId, ...promptContext },
         {
           onStart: (data) => {
             setStreaming(true, data.id);
@@ -60,7 +75,7 @@ export function useStreamChat() {
             accumulated += data.delta;
             updateStreamingContent(data.delta);
           },
-          onEnd: (data) => {
+          onEnd: async (data) => {
             const assistantMsg: Message = {
               id: data.id,
               conversation_id: data.conversation_id,
@@ -70,14 +85,24 @@ export function useStreamChat() {
               token_count: data.token_count,
               created_at: new Date().toISOString(),
             };
+            await saveLocalMessage(assistantMsg);
             finalizeStream(assistantMsg);
+            await queryClient.invalidateQueries({ queryKey: ['messages', convId] });
+            await queryClient.invalidateQueries({ queryKey: ['conversations'] });
           },
           onError: (error) => {
             console.error('Stream error:', error);
+            setChatError(error.message);
             setStreaming(false);
           },
         },
       );
+      } catch (error) {
+        setChatError(error instanceof Error ? error.message : 'Could not save or send message');
+        setStreaming(false);
+      } finally {
+        sending.current = false;
+      }
     },
     [
       activeConversationId,
@@ -88,6 +113,8 @@ export function useStreamChat() {
       setStreaming,
       updateStreamingContent,
       finalizeStream,
+      queryClient,
+      setChatError,
     ],
   );
 

@@ -1,6 +1,5 @@
-import type { StreamCallbacks } from '@/types/conversation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import type { StreamCallbacks, StreamMessageRequest } from '@/types/conversation';
+import { getApiBase } from '@/lib/api-client';
 
 export class ConversationStreamClient {
   private controller: AbortController | null = null;
@@ -11,7 +10,7 @@ export class ConversationStreamClient {
   }
 
   async start(
-    body: { content: string; conversation_id?: string },
+    body: StreamMessageRequest,
     callbacks: StreamCallbacks,
   ): Promise<void> {
     this.controller = new AbortController();
@@ -26,7 +25,7 @@ export class ConversationStreamClient {
       };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const response = await fetch(`${API_BASE}${this.url}`, {
+      const response = await fetch(`${getApiBase()}${this.url}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -42,6 +41,8 @@ export class ConversationStreamClient {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let completed = false;
+      let currentEvent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -51,31 +52,37 @@ export class ConversationStreamClient {
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
-        let currentEvent = '';
         for (const line of lines) {
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim();
+          } else if (line === '') {
+            currentEvent = '';
           } else if (line.startsWith('data: ')) {
             const data = line.slice(6);
+            let parsed: unknown;
             try {
-              const parsed = JSON.parse(data);
-              switch (currentEvent) {
+              parsed = JSON.parse(data);
+            } catch {
+              continue;
+            }
+            switch (currentEvent) {
                 case 'message_start':
-                  callbacks.onStart(parsed);
+                  callbacks.onStart(parsed as Parameters<StreamCallbacks['onStart']>[0]);
                   break;
                 case 'content_delta':
-                  callbacks.onDelta(parsed);
+                  callbacks.onDelta(parsed as Parameters<StreamCallbacks['onDelta']>[0]);
                   break;
                 case 'message_end':
-                  callbacks.onEnd(parsed);
+                  await callbacks.onEnd(parsed as Parameters<StreamCallbacks['onEnd']>[0]);
+                  completed = true;
                   break;
-              }
-            } catch {
-              // Skip malformed JSON lines
+                case 'message_error':
+                  throw new Error((parsed as { message?: string }).message || 'Model response failed');
             }
           }
         }
       }
+      if (!completed) throw new Error('Response ended before the assistant message was complete');
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
       callbacks.onError(error as Error);

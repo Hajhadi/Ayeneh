@@ -7,7 +7,7 @@ import json
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, Query
@@ -22,9 +22,16 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
+class HistoryItem(BaseModel):
+    role: Literal['user', 'assistant']
+    content: str = Field(max_length=2000)
+
+
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=10000)
     conversation_id: str | None = None
+    conversation_history: list[HistoryItem] = Field(default_factory=list, max_length=12)
+    memory_context: str = Field(default='', max_length=3500)
 
 
 class SendMessageResponse(BaseModel):
@@ -66,27 +73,12 @@ async def send_message(body: SendMessageRequest, user: Any = None) -> dict:
     start = time.monotonic()
 
     try:
-        # Retrieve conversation history from database
-        conversation_history = []
-        try:
-            import sqlite3
-            conn = sqlite3.connect("/home/hadi/ayeneh/Ayeneh/ayeneh.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT role, content FROM messages WHERE conversation_id=? AND deleted_at IS NULL ORDER BY sequence_number LIMIT 20",
-                (conv_id,)
-            )
-            for row in cursor.fetchall():
-                conversation_history.append({"role": row[0], "content": row[1]})
-            conn.close()
-        except Exception:
-            pass
-
         context = {
             "user_id": "web-user",
             "conversation_id": conv_id,
             "user_message": body.content,
-            "conversation_history": conversation_history,
+            "conversation_history": [item.model_dump() for item in body.conversation_history],
+            "memory_context": body.memory_context,
         }
 
         # Run full pipeline
@@ -97,27 +89,6 @@ async def send_message(body: SendMessageRequest, user: Any = None) -> dict:
         response_text = pipeline_result.final_response
         if not response_text:
             response_text = "I couldn't generate a response."
-
-        # Save assistant message to database
-        try:
-            import sqlite3
-            conn = sqlite3.connect("/home/hadi/ayeneh/Ayeneh/ayeneh.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT MAX(sequence_number) FROM messages WHERE conversation_id=?",
-                (conv_id,)
-            )
-            last_seq = cursor.fetchone()[0]
-            seq = (last_seq + 1) if last_seq else 1
-
-            cursor.execute(
-                "INSERT INTO messages (id, conversation_id, user_id, role, content, sequence_number, token_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-                (msg_id, conv_id, str(uuid.uuid4()), "assistant", response_text, seq, 0)
-            )
-            conn.commit()
-            conn.close()
-        except Exception as db_exc:
-            logger.warning("failed_to_save_message", error=str(db_exc))
 
         duration_ms = (time.monotonic() - start) * 1000
         logger.info(
@@ -162,27 +133,12 @@ async def send_message_stream(body: SendMessageRequest, user: Any = None) -> Str
         yield f"event: message_start\ndata: {json.dumps({'id': msg_id, 'conversation_id': conv_id, 'role': 'assistant', 'created_at': now})}\n\n"
 
         try:
-            # Retrieve conversation history
-            conversation_history = []
-            try:
-                import sqlite3
-                conn = sqlite3.connect("/home/hadi/ayeneh/Ayeneh/ayeneh.db")
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT role, content FROM messages WHERE conversation_id=? AND deleted_at IS NULL ORDER BY sequence_number LIMIT 20",
-                    (conv_id,)
-                )
-                for row in cursor.fetchall():
-                    conversation_history.append({"role": row[0], "content": row[1]})
-                conn.close()
-            except Exception:
-                pass
-
             context = {
                 "user_id": "web-user",
                 "conversation_id": conv_id,
                 "user_message": body.content,
-                "conversation_history": conversation_history,
+                "conversation_history": [item.model_dump() for item in body.conversation_history],
+                "memory_context": body.memory_context,
             }
 
             # Queue for interleaving pipeline events with token streaming
@@ -247,26 +203,12 @@ async def send_message_stream(body: SendMessageRequest, user: Any = None) -> Str
             token_count = 0
             accumulated = ""
 
-            async for chunk in agent.stream(enriched_context):
+            async for chunk in agent.stream(enriched_context, raise_on_error=True):
                 if chunk:
                     delta = json.dumps({"delta": chunk, "index": token_count})
                     yield f"event: content_delta\ndata: {delta}\n\n"
                     accumulated += chunk
                     token_count += 1
-
-            # Save to database
-            try:
-                import sqlite3
-                conn = sqlite3.connect("/home/hadi/ayeneh/Ayeneh/ayeneh.db")
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO messages (id, conversation_id, user_id, role, content, sequence_number, token_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-                    (str(uuid.uuid4()), conv_id, str(uuid.uuid4()), "assistant", accumulated, 1, token_count)
-                )
-                conn.commit()
-                conn.close()
-            except Exception:
-                pass
 
             yield f"event: message_end\ndata: {json.dumps({'id': msg_id, 'conversation_id': conv_id, 'content': accumulated, 'token_count': token_count})}\n\n"
 
@@ -274,7 +216,7 @@ async def send_message_stream(body: SendMessageRequest, user: Any = None) -> Str
 
         except Exception as exc:
             logger.exception("stream_failed", error=str(exc))
-            yield f"event: message_end\ndata: {json.dumps({'id': msg_id, 'conversation_id': conv_id, 'content': f'Error: {str(exc)[:200]}', 'token_count': 0})}\n\n"
+            yield f"event: message_error\ndata: {json.dumps({'message': str(exc)[:200]})}\n\n"
 
     return StreamingResponse(
         event_stream(),

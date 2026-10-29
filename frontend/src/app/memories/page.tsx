@@ -1,227 +1,98 @@
 'use client';
 
-import { useState } from 'react';
-import { useMemories, useSearchMemories, useDeleteMemory, useArchiveMemory, useMemoryEvolution, useConsolidateMemory, useMemoConsolidations } from '@/hooks/use-api';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageLayout } from '@/components/layout/page-layout';
-import { SkeletonList } from '@/components/common/skeleton';
-import { ErrorState } from '@/components/common/error-state';
-import { EmptyState } from '@/components/common/empty-state';
-import { ConfirmDialog } from '@/components/common/confirm-dialog';
-import { SearchBar } from '@/components/common/search-bar';
-import { Button } from '@/components/ui/button';
-import type { Memory } from '@/types/api';
-
-function MemoryCard({ memory, onSelect, onDelete, onArchive, onConsolidate }: {
-  memory: Memory;
-  onSelect: () => void;
-  onDelete: () => void;
-  onArchive: () => void;
-  onConsolidate: () => void;
-}) {
-  const confColor = memory.confidence >= 0.8 ? 'text-green-600' :
-                    memory.confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
-  return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 cursor-pointer" onClick={onSelect}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-              {memory.type}
-            </span>
-            {memory.evolution_version && memory.evolution_version > 1 && (
-              <span className="inline-flex items-center rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
-                v{memory.evolution_version}
-              </span>
-            )}
-            {memory.status === 'superseded' && (
-              <span className="text-xs text-gray-400">superseded</span>
-            )}
-          </div>
-          <p className="text-sm text-gray-900 line-clamp-2">{memory.content}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1 ml-3 shrink-0">
-          <span className={`text-xs font-mono ${confColor}`}>
-            {(memory.confidence * 100).toFixed(0)}%
-          </span>
-          {memory.confidence_history && Object.keys(memory.confidence_history).length > 1 && (
-            <span className="text-[10px] text-gray-400">evolved</span>
-          )}
-        </div>
-      </div>
-      <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-        <span>{new Date(memory.created_at).toLocaleDateString()}</span>
-        <div className="flex gap-1">
-          <button onClick={onConsolidate} className="hover:text-purple-600 px-1">Consolidate</button>
-          <button onClick={onArchive} className="hover:text-yellow-600 px-1">Archive</button>
-          <button onClick={onDelete} className="hover:text-red-600 px-1">Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MemoryDetail({ memory, onClose }: { memory: Memory; onClose: () => void }) {
-  const { data: history, isLoading } = useMemoryEvolution(memory.id);
-  return (
-    <div className="fixed inset-0 z-50 flex bg-black/50">
-      <div className="ml-auto w-full max-w-lg bg-white h-full overflow-y-auto p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Memory Details</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl">&times;</button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 mb-2">
-              {memory.type}
-            </span>
-            <p className="text-gray-900">{memory.content}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg bg-gray-50 p-3">
-              <div className="text-gray-500">Confidence</div>
-              <div className="font-semibold">{(memory.confidence * 100).toFixed(1)}%</div>
-            </div>
-            <div className="rounded-lg bg-gray-50 p-3">
-              <div className="text-gray-500">Status</div>
-              <div className="font-semibold">{memory.status}</div>
-            </div>
-            <div className="rounded-lg bg-gray-50 p-3">
-              <div className="text-gray-500">Version</div>
-              <div className="font-semibold">v{memory.evolution_version || 1}</div>
-            </div>
-            <div className="rounded-lg bg-gray-50 p-3">
-              <div className="text-gray-500">Updated</div>
-              <div className="font-semibold">{new Date(memory.updated_at).toLocaleDateString()}</div>
-            </div>
-          </div>
-          {memory.confidence_history && Object.keys(memory.confidence_history).length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Confidence History</h3>
-              <div className="flex gap-1 flex-wrap">
-                {Object.entries(memory.confidence_history).map(([v, c]) => (
-                  <span key={v} className="text-xs bg-gray-100 rounded px-2 py-1">
-                    {v}: {(c as number * 100).toFixed(0)}%
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {history && history.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Evolution History</h3>
-              <div className="space-y-2">
-                {history.map((e, i) => (
-                  <div key={i} className="text-xs bg-gray-50 rounded p-2">
-                    <span className="font-medium">{e.event_type}</span>
-                    {e.old_confidence !== undefined && e.new_confidence !== undefined && (
-                      <span className="ml-2 text-gray-500">
-                        confidence: {((e.old_confidence || 0) * 100).toFixed(0)}% → {((e.new_confidence || 0) * 100).toFixed(0)}%
-                      </span>
-                    )}
-                    {e.detail && <span className="ml-2 text-gray-400">{e.detail}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { useChatStore } from '@/stores/chat-store';
+import {
+  getLocalDigest, listLocalDigests, removePinnedNote, searchLocalHistory,
+  type MemoryExcerpt,
+} from '@/lib/local-data';
+import type { Message } from '@/types/conversation';
 
 export default function MemoriesPage() {
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Memory | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Memory | null>(null);
+  const router = useRouter();
+  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
+  const [pinned, setPinned] = useState<MemoryExcerpt[]>([]);
+  const [digest, setDigest] = useState<MemoryExcerpt[]>([]);
+  const [query, setQuery] = useState('');
+  const [matches, setMatches] = useState<Message[]>([]);
+  const [error, setError] = useState('');
 
-  const { data, isLoading, error, refetch } = useMemories();
-  const { data: searchData, isLoading: searchLoading } = useSearchMemories(search);
-  const deleteMutation = useDeleteMemory();
-  const archiveMutation = useArchiveMemory();
-  const consolidateMutation = useConsolidateMemory();
-  const { data: consolidationData } = useMemoConsolidations(5);
+  useEffect(() => {
+    Promise.all([getLocalDigest('pinned'), listLocalDigests()])
+      .then(([notes, excerpts]) => { setPinned(notes); setDigest(excerpts); })
+      .catch((reason) => setError(String(reason)));
+  }, []);
 
-  const memories = search.length > 0 ? (searchData?.data || []) : (data?.data || []);
-  const consolidations = consolidationData?.data || [];
+  useEffect(() => {
+    if (!query.trim()) { setMatches([]); return; }
+    let active = true;
+    searchLocalHistory(query, 30)
+      .then((items) => { if (active) setMatches(items); })
+      .catch((reason) => { if (active) setError(String(reason)); });
+    return () => { active = false; };
+  }, [query]);
+
+  function openConversation(id: string) {
+    setActiveConversation(id);
+    router.push('/chat');
+  }
 
   return (
-    <PageLayout
-      title="Memories"
-      description="Your cognitive memories and insights (MEMO)"
-      actions={<Button onClick={() => refetch()} variant="outline" size="sm">Refresh</Button>}
-    >
-      <div className="mb-4">
-        <SearchBar placeholder="Search memories..." onSearch={setSearch} />
-      </div>
+    <PageLayout title="Memories" description="Private notes and excerpts saved on this device">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <input value={query} onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search local history" placeholder="Search your past conversations"
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-violet-400/50" />
+        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
 
-      {(isLoading || searchLoading) && <SkeletonList count={5} />}
-
-      {error && <ErrorState message="Failed to load memories" onRetry={() => refetch()} />}
-
-      {!isLoading && !error && memories.length === 0 && (
-        <EmptyState title="No memories yet" description="Memories will appear here as you interact with Ayeneh." />
-      )}
-
-      <div className="grid gap-3">
-        {memories.map((m) => (
-          <MemoryCard
-            key={m.id}
-            memory={m}
-            onSelect={() => setSelected(m)}
-            onDelete={() => setDeleteTarget(m)}
-            onArchive={() => archiveMutation.mutate(m.id)}
-            onConsolidate={() =>
-              consolidateMutation.mutate({
-                target_memory_id: m.id,
-                confidence_before: m.confidence,
-                confidence_after: Math.min(1, m.confidence + 0.1),
-                decision: 'promote',
-              })
-            }
-          />
-        ))}
-      </div>
-
-      {consolidations.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold mb-3" style={{ color: '#fff' }}>Recent Consolidations</h2>
-          <div className="grid gap-2">
-            {consolidations.map((c) => (
-              <div key={c.id} className="rounded-lg border p-3 flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(22,22,30,0.8)' }}>
-                <div className="flex items-center gap-3">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    c.decision === 'promote' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {c.decision}
-                  </span>
-                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                    Confidence: {(c.confidence_before * 100).toFixed(0)}% → {(c.confidence_after * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  {c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}
-                </span>
+        {query.trim() ? (
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-white/70">Matching conversations</h2>
+            {matches.length === 0 && <p className="text-sm text-white/40">No matches found on this device.</p>}
+            <div className="space-y-2">
+              {matches.map((item) => <button key={item.id} onClick={() => openConversation(item.conversation_id)}
+                className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-colors hover:bg-white/10">
+                <span className="text-xs text-violet-300">{item.role} · {new Date(item.created_at).toLocaleDateString()}</span>
+                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-white/80">{item.content}</p>
+              </button>)}
+            </div>
+          </section>
+        ) : (
+          <>
+            <section>
+              <h2 className="mb-1 text-sm font-semibold text-white/70">Pinned facts</h2>
+              <p className="mb-3 text-xs text-white/40">You control these notes in Settings. Ayeneh uses a small selection in each reply.</p>
+              {pinned.length === 0 && <p className="text-sm text-white/40">No pinned facts yet.</p>}
+              <div className="space-y-2">
+                {pinned.map((item) => <div key={item.id} className="flex gap-3 rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
+                  <p className="flex-1 whitespace-pre-wrap text-sm text-white/80">{item.content}</p>
+                  <button className="text-xs text-red-300" onClick={async () => {
+                    try {
+                      await removePinnedNote(item.id);
+                      setPinned((notes) => notes.filter((note) => note.id !== item.id));
+                    } catch (reason) { setError(String(reason)); }
+                  }}>Remove</button>
+                </div>)}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </section>
 
-      {selected && <MemoryDetail memory={selected} onClose={() => setSelected(null)} />}
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete Memory"
-        message={`Are you sure you want to delete this memory? This cannot be undone.`}
-        danger
-        confirmLabel="Delete"
-        onConfirm={() => {
-          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
-          setDeleteTarget(null);
-        }}
-        onCancel={() => setDeleteTarget(null)}
-      />
+            <section>
+              <h2 className="mb-1 text-sm font-semibold text-white/70">Conversation highlights</h2>
+              <p className="mb-3 text-xs text-white/40">Short, exact excerpts from older messages. Full conversations stay available in Chat.</p>
+              {digest.length === 0 && <p className="text-sm text-white/40">Highlights appear as conversations grow.</p>}
+              <div className="space-y-2">
+                {digest.map((item) => <button key={item.id} onClick={() => openConversation(item.conversation_id)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-colors hover:bg-white/10">
+                  <span className="text-xs text-violet-300">{new Date(item.created_at).toLocaleDateString()}</span>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{item.content}</p>
+                </button>)}
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </PageLayout>
   );
 }
