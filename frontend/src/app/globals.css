@@ -68,6 +68,15 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  /* Reduced motion must preserve visibility: landing elements start at opacity:0
+     for their entrance animation, so make them immediately visible when the
+     WebView asks us to disable animations. */
+  .landing-logo, .landing-title, .landing-subtitle, .landing-desc,
+  .landing-tag-1, .landing-tag-2, .landing-tag-3, .landing-input, .landing-footer {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
 }
 
 h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea {
