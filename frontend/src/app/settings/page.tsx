@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { addPinnedNote, exportLocalData, getLocalDigest, importLocalData, removePinnedNote, type MemoryExcerpt } from '@/lib/local-data';
+import { ModelProfilesSettings } from '@/components/settings/model-profiles-settings';
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -109,10 +110,12 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <ModelProfilesSettings />
+
         <div className="rounded-lg p-6" style={{ border: '1px solid rgba(255,255,255,0.06)', background: '#1A1A2E' }}>
-          <h3 className="text-lg font-medium mb-2" style={{ color: '#fff' }}>Backend Connection</h3>
+          <h3 className="text-lg font-medium mb-2" style={{ color: '#fff' }}>Legacy backend (optional)</h3>
           <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            Set the URL of your Ayeneh backend. This is required on a physical phone; localhost refers to the phone itself.
+            Older library and dashboard screens still use this connection. Chat on Android uses the cloud model key saved above and does not need this server.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input

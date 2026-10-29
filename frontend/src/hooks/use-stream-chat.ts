@@ -2,13 +2,15 @@ import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/stores/chat-store';
 import { ConversationStreamClient } from '@/lib/stream-client';
+import { DirectModelClient } from '@/lib/direct-model-client';
+import { secureModelAvailable } from '@/lib/secure-model';
 import { buildLocalPromptContext } from '@/lib/local-context';
 import { saveLocalMessage } from '@/lib/local-data';
 import { useCreateConversation } from './use-create-conversation';
 import type { Message } from '@/types/conversation';
 
 export function useStreamChat() {
-  const streamClient = useRef<ConversationStreamClient | null>(null);
+  const streamClient = useRef<ConversationStreamClient | DirectModelClient | null>(null);
   const sending = useRef(false);
   const queryClient = useQueryClient();
   const createConversation = useCreateConversation();
@@ -59,9 +61,9 @@ export function useStreamChat() {
 
       setStreaming(true, null, convId);
 
-      streamClient.current = new ConversationStreamClient(
-        '/api/v1/runtime/message/stream',
-      );
+      streamClient.current = secureModelAvailable()
+        ? new DirectModelClient()
+        : new ConversationStreamClient('/api/v1/runtime/message/stream');
 
       let accumulated = '';
 

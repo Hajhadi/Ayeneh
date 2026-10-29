@@ -9,10 +9,12 @@ import { ChatWindow } from '@/components/chat/chat-window';
 import { MessageInput } from '@/components/chat/message-input';
 import { ConversationList } from '@/components/chat/conversation-list';
 import { SearchPanel } from '@/components/chat/search-panel';
+import { SecureModel, secureModelAvailable } from '@/lib/secure-model';
 
 export default function ChatPage() {
   const router = useRouter();
   const [showSearch, setShowSearch] = useState(false);
+  const [modelLabel, setModelLabel] = useState('Cloud model');
   const {
     activeConversationId, messages: storeMessages,
     isStreaming, streamingContent, setMessages, setActiveConversation,
@@ -21,6 +23,13 @@ export default function ChatPage() {
   } = useChatStore();
   const { sendMessage, cancelStream } = useStreamChat();
   const { data: messagesData } = useConversationMessages(activeConversationId);
+
+  useEffect(() => {
+    if (!secureModelAvailable()) { setModelLabel('Backend'); return; }
+    SecureModel.listProfiles().then(({ profiles, activeProvider }) => {
+      setModelLabel(profiles.find((item) => item.provider === activeProvider)?.model || 'Set up model');
+    }).catch(() => setModelLabel('Set up model'));
+  }, []);
 
   useEffect(() => {
     if (messagesData?.data && !isStreaming) {
@@ -90,7 +99,7 @@ export default function ChatPage() {
             background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
           }}>
             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22C55E' }} />
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>Connected</span>
+            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>{modelLabel}</span>
           </div>
         </div>
       </aside>
@@ -157,7 +166,7 @@ export default function ChatPage() {
               background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.15)',
               color: '#a78bfa',
             }}>
-              GPT-4o
+              {modelLabel}
             </span>
           </div>
         </header>

@@ -21,9 +21,15 @@ LLM summaries and never overwrite original messages.
 The runtime streaming endpoint accepts `conversation_history` and
 `memory_context` from the app. It no longer reads or writes chat messages at a
 hard-coded SQLite path. The current Python pipeline still needs a running
-service for cloud model responses, and other legacy screens still call that
-service. A serverless model gateway and migration of those screens are separate
-work; this local data change alone does not make the entire app server-free.
+service for web responses, and other legacy screens still call that service.
+On Android, Chat can instead call an OpenAI-compatible cloud model directly.
+The API key is encrypted by Android Keystore and stays in the app's private
+storage. JavaScript sends only the prompt to the native bridge; the bridge adds
+the key to the HTTPS request. Chat data backups deliberately omit model keys.
+Custom URLs should be trusted because the selected provider receives the key
+and the prompt. A compromised or rooted device can still expose runtime secrets.
+The legacy library, pattern, and reflection screens have not yet been migrated
+to device-only operation.
 
 Debug APKs use `ir.ayeneh.app.preview` so they can be installed beside an older
 `ir.ayeneh.app` APK with a different signing key. The two apps have separate
