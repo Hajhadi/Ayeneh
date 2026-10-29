@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, BookOpen, Eye, Sparkles, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowUpRight, BookOpen, Eye, Settings2, Sparkles, TrendingUp } from 'lucide-react';
 
 const PROMPTS = [
   'What pattern is asking for your attention today?',
@@ -23,6 +25,7 @@ const reveal = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const [promptIndex, setPromptIndex] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -34,8 +37,9 @@ export default function HomePage() {
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim()) return;
-    window.location.href = `/chat?q=${encodeURIComponent(inputValue)}`;
-  }, [inputValue]);
+    sessionStorage.setItem('ayeneh_initial_prompt', inputValue.trim());
+    router.push('/chat');
+  }, [inputValue, router]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -55,7 +59,10 @@ export default function HomePage() {
           <span className="mirror-brand-orbit"><span /></span>
           <span>Ayeneh</span>
         </a>
-        <div className="mirror-status"><i /> private by design</div>
+        <div className="mirror-topbar-actions">
+          <div className="mirror-status"><i /> private by design</div>
+          <Link href="/settings" className="mirror-settings-link" aria-label="Model and app settings"><Settings2 size={18} /></Link>
+        </div>
       </header>
 
       <section className="mirror-hero">

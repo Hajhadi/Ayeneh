@@ -107,6 +107,9 @@ body {
 .mirror-aurora-one { top: -22vw; left: 18%; background: rgba(113,73,255,.28); }
 .mirror-aurora-two { right: -20vw; bottom: 4%; background: rgba(32,193,214,.14); animation-delay: -7s; }
 .mirror-topbar { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; max-width: 1240px; margin: 0 auto; padding: 28px 0; }
+.mirror-topbar-actions { display: flex; align-items: center; gap: 14px; }
+.mirror-settings-link { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(190,178,255,.24); border-radius: 11px; color: #c4b5fd; background: rgba(124,58,237,.12); transition: background .2s, transform .2s, box-shadow .2s; }
+.mirror-settings-link:hover { background: rgba(124,58,237,.24); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(100,72,255,.2); }
 .mirror-brand { display: inline-flex; align-items: center; gap: 11px; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: -.02em; text-decoration: none; }
 .mirror-brand-orbit { position: relative; display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid rgba(190,178,255,.5); border-radius: 10px; background: linear-gradient(135deg, #7652f4, #5148de); box-shadow: 0 0 30px rgba(100,72,255,.35); }
 .mirror-brand-orbit::before, .mirror-brand-orbit::after, .mirror-brand-orbit span { position: absolute; border: 1px solid rgba(255,255,255,.8); border-radius: 50%; content: ''; }
