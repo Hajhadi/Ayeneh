@@ -24,3 +24,8 @@ hard-coded SQLite path. The current Python pipeline still needs a running
 service for cloud model responses, and other legacy screens still call that
 service. A serverless model gateway and migration of those screens are separate
 work; this local data change alone does not make the entire app server-free.
+
+Debug APKs use `ir.ayeneh.app.preview` so they can be installed beside an older
+`ir.ayeneh.app` APK with a different signing key. The two apps have separate
+local databases. A stable signing key is required for future in-place updates
+that preserve the installed app's data.
