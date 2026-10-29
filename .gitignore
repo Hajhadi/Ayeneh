@@ -22,3 +22,4 @@ frontend/android/**/build/
 __pycache__/
 *.pyc
 ayeneh.db
+.signing/

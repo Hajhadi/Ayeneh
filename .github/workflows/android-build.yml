@@ -47,9 +47,22 @@ jobs:
       - name: Export web app and sync Capacitor
         run: pnpm --filter ayeneh-web build && pnpm --filter ayeneh-web exec cap sync android
 
+      - name: Prepare private preview signing key
+        env:
+          PREVIEW_KEYSTORE_B64: ${{ secrets.AYENEH_PREVIEW_KEYSTORE_B64 }}
+        run: |
+          test -n "$PREVIEW_KEYSTORE_B64"
+          printf '%s' "$PREVIEW_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ayeneh-preview.p12"
+          chmod 600 "$RUNNER_TEMP/ayeneh-preview.p12"
+          echo "AYENEH_PREVIEW_KEYSTORE=$RUNNER_TEMP/ayeneh-preview.p12" >> "$GITHUB_ENV"
+
       - name: Build debug APK
         working-directory: frontend/android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          AYENEH_PREVIEW_PASSWORD: ${{ secrets.AYENEH_PREVIEW_PASSWORD }}
+        run: |
+          test -n "$AYENEH_PREVIEW_PASSWORD"
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

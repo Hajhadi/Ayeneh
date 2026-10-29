@@ -28,4 +28,7 @@ work; this local data change alone does not make the entire app server-free.
 Debug APKs use `ir.ayeneh.app.preview` so they can be installed beside an older
 `ir.ayeneh.app` APK with a different signing key. The two apps have separate
 local databases. A stable signing key is required for future in-place updates
-that preserve the installed app's data.
+that preserve the installed app's data. The Preview workflow uses a private
+PKCS#12 key from GitHub Actions secrets. A local copy is kept in the ignored
+`.signing/` folder; back up that folder privately if you need to sign an APK
+outside GitHub Actions. Never commit its contents.

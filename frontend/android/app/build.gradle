@@ -1,5 +1,7 @@
 apply plugin: 'com.android.application'
 
+def previewKeystorePath = System.getenv('AYENEH_PREVIEW_KEYSTORE')
+
 android {
     namespace = "ir.ayeneh.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,7 +9,7 @@ android {
         applicationId "ir.ayeneh.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,10 +18,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (previewKeystorePath) {
+            preview {
+                storeFile file(previewKeystorePath)
+                storePassword System.getenv('AYENEH_PREVIEW_PASSWORD')
+                keyAlias 'ayeneh-preview'
+                keyPassword System.getenv('AYENEH_PREVIEW_PASSWORD')
+                storeType 'pkcs12'
+            }
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix ".preview"
             versionNameSuffix "-preview"
+            if (previewKeystorePath) signingConfig signingConfigs.preview
         }
         release {
             minifyEnabled false
