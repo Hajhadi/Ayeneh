@@ -84,10 +84,7 @@ class RetryManager:
 
         # Check exception type names for common retryable types
         type_name = type(error).__name__.lower()
-        if any(kw in type_name for kw in ("timeout", "connection", "network")):
-            return True
-
-        return False
+        return bool(any(kw in type_name for kw in ("timeout", "connection", "network")))
 
     def get_delay(self, attempt: int) -> float:
         """Calculate delay in seconds for the given attempt (0-indexed).
@@ -95,7 +92,7 @@ class RetryManager:
         Uses exponential backoff with full jitter.
         """
         delay_ms = min(
-            self.base_delay_ms * (self.exponential_base ** attempt),
+            self.base_delay_ms * (self.exponential_base**attempt),
             self.max_delay_ms,
         )
         # Full jitter: random value between 0 and the calculated delay

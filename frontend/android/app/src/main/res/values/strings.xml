@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ayeneh</string>
+    <string name="title_activity_main">Ayeneh</string>
+    <string name="package_name">ir.ayeneh.app</string>
+    <string name="custom_url_scheme">ir.ayeneh.app</string>
+</resources>

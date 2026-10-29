@@ -23,7 +23,7 @@ describe('ChatWindow', () => {
     render(
       <ChatWindow messages={[]} isStreaming={false} streamingContent="" />,
     );
-    expect(screen.getByText('Start a conversation with Ayeneh.')).toBeInTheDocument();
+    expect(screen.getByText(/Your Cognitive Mirror for self-observation and growth/)).toBeInTheDocument();
   });
 
   it('renders user messages with right alignment', () => {
@@ -48,9 +48,9 @@ describe('ChatWindow', () => {
     expect(screen.getByText('Bold text')).toBeInTheDocument();
   });
 
-  it('renders streaming content with cursor', () => {
+  it('renders streaming content', () => {
     const messages = [makeMessage({ role: 'user', content: 'Hello' })];
-    const { container } = render(
+    render(
       <ChatWindow
         messages={messages}
         isStreaming={true}
@@ -58,7 +58,6 @@ describe('ChatWindow', () => {
       />,
     );
     expect(screen.getByText('Hello world')).toBeInTheDocument();
-    expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
   it('shows spinner when streaming with no content yet', () => {
@@ -70,7 +69,7 @@ describe('ChatWindow', () => {
         streamingContent=""
       />,
     );
-    expect(container.querySelector('svg.animate-spin')).toBeInTheDocument();
+    expect(container.querySelector('.typing-dot')).toBeInTheDocument();
   });
 
   it('preserves message ordering', () => {

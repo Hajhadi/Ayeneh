@@ -30,7 +30,7 @@ export function MessageInput({ onSend, onCancel, disabled = false, isStreaming =
           value={value}
           onChange={(e) => { setValue(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Message Ayeneh..."
+          placeholder="Type a message..."
           rows={1}
           disabled={disabled || isStreaming}
           className="flex-1 resize-none bg-transparent outline-none disabled:opacity-40"
@@ -39,7 +39,7 @@ export function MessageInput({ onSend, onCancel, disabled = false, isStreaming =
         {isStreaming ? (
           <button onClick={onCancel} className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
                   style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
-                  aria-label="Stop">
+                  aria-label="Stop generating">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           </button>
         ) : (

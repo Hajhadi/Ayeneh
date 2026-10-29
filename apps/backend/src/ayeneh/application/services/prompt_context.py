@@ -93,24 +93,26 @@ class PromptContextService:
         ctx.epistemic_context = self._format_epistemic(retrieval)
 
         if conversation_id and self._conversation_service:
-            ctx.conversation_context = await self._format_conversation(
-                user_id, conversation_id
-            )
+            ctx.conversation_context = await self._format_conversation(user_id, conversation_id)
 
         ctx = self._apply_budget(ctx)
         ctx.token_estimate = sum(
             self._estimate_tokens(getattr(ctx, f, ""))
-            for f in ["system_context", "goal_context", "memory_context",
-                      "knowledge_context", "pattern_context",
-                      "reflection_context", "conversation_context",
-                      "epistemic_context"]
+            for f in [
+                "system_context",
+                "goal_context",
+                "memory_context",
+                "knowledge_context",
+                "pattern_context",
+                "reflection_context",
+                "conversation_context",
+                "epistemic_context",
+            ]
         )
 
         return ctx
 
-    async def _retrieve(
-        self, user_id: str, query: str
-    ) -> RetrievalResult | None:
+    async def _retrieve(self, user_id: str, query: str) -> RetrievalResult | None:
         if not self._retrieval:
             return None
         try:
@@ -157,25 +159,30 @@ class PromptContextService:
             header += f" ({evolved_count} evolved)"
         header += ":"
         lines = [header]
-        for mem in retrieval.memories[:10]:
+        # Keep retrieval compact: ranking already happened upstream, so preserve
+        # the strongest evidence and avoid spending prompt budget on verbose
+        # duplicate prose. Provenance and confidence remain visible to the model.
+        for mem in retrieval.memories[:8]:
             ev_ver = mem.get("evolution_version", 1)
             tag = f"v{ev_ver}" if ev_ver > 1 else mem.get("type", "unknown")
             conf = mem.get("confidence", 0.5)
-            lines.append(f"- [{tag} conf={conf:.2f}] {mem['content']}")
+            content = self._compact_text(str(mem.get("content", "")), 260)
+            if content:
+                lines.append(f"- [{tag} conf={conf:.2f}] {content}")
         return "\n".join(lines)
 
     def _format_knowledge(self, retrieval: RetrievalResult) -> str:
         if not retrieval.knowledge_chunks:
             return ""
         lines = ["Relevant knowledge from your library:"]
-        for chunk in retrieval.knowledge_chunks[:8]:
+        for chunk in retrieval.knowledge_chunks[:6]:
             source = chunk.get("book_title", "Unknown")
             section = chunk.get("section", "")
             prefix = f"  [{source}"
             if section:
                 prefix += f" — {section}"
             prefix += "]"
-            lines.append(f"{prefix} {chunk['content'][:300]}")
+            lines.append(f"{prefix} {self._compact_text(str(chunk.get('content', '')), 240)}")
         return "\n".join(lines)
 
     def _format_patterns(self, retrieval: RetrievalResult) -> str:
@@ -190,9 +197,9 @@ class PromptContextService:
         if not retrieval.reflections:
             return ""
         lines = ["Recent reflections:"]
-        for ref in retrieval.reflections[:3]:
+        for ref in retrieval.reflections[:2]:
             title = ref.get("title", "")
-            narrative = ref.get("narrative", "")[:200]
+            narrative = self._compact_text(str(ref.get("narrative", "")), 180)
             lines.append(f"- {title}: {narrative}")
         return "\n".join(lines)
 
@@ -224,21 +231,17 @@ class PromptContextService:
 
         return "\n".join(lines) if lines else ""
 
-    async def _format_conversation(
-        self, user_id: str, conversation_id: str
-    ) -> str:
+    async def _format_conversation(self, user_id: str, conversation_id: str) -> str:
         if not self._conversation_service:
             return ""
         try:
-            messages = await self._conversation_service.get_messages(
-                conversation_id, limit=20
-            )
+            messages = await self._conversation_service.get_messages(conversation_id, limit=20)
             if not messages:
                 return ""
             lines = ["Recent conversation:"]
-            for msg in messages[-10:]:
+            for msg in messages[-6:]:
                 role = msg.get("role", "user").capitalize()
-                content = msg.get("content", "")[:200]
+                content = self._compact_text(str(msg.get("content", "")), 180)
                 lines.append(f"{role}: {content}")
             return "\n".join(lines)
         except Exception:
@@ -271,9 +274,7 @@ class PromptContextService:
             text = getattr(ctx, field_name, "")
             tokens = self._estimate_tokens(text)
             if tokens > cap:
-                words = text.split()
-                estimated_words = max(1, int(cap * 1.3))
-                setattr(ctx, field_name, " ".join(words[:estimated_words]) + "...")
+                setattr(ctx, field_name, self._fit_lines(text, cap))
                 ctx.truncated_components.append(field_name)
                 if field_name == "goal_context":
                     ctx.goal_truncated = True
@@ -284,3 +285,31 @@ class PromptContextService:
     @staticmethod
     def _estimate_tokens(text: str) -> int:
         return max(1, len(text.split()) * 4 // 3)
+
+    @staticmethod
+    def _compact_text(text: str, max_chars: int) -> str:
+        """Normalize whitespace and cap one evidence item without losing its start."""
+        compact = " ".join(text.split())
+        if len(compact) <= max_chars:
+            return compact
+        clipped = compact[: max_chars - 1].rsplit(" ", 1)[0]
+        return clipped + "…"
+
+    def _fit_lines(self, text: str, token_cap: int) -> str:
+        """Budget context by complete lines so evidence bullets stay valid."""
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        kept: list[str] = []
+        used = 0
+        for line in lines:
+            line_tokens = self._estimate_tokens(line)
+            if used + line_tokens > token_cap:
+                break
+            kept.append(line)
+            used += line_tokens
+        if len(kept) < len(lines):
+            if not kept:
+                return self._compact_text(lines[0], max(32, int(token_cap * 3 / 2))) + "…"
+            kept[-1] = kept[-1].rstrip("…") + "…"
+        return "\n".join(kept)

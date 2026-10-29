@@ -38,14 +38,14 @@ export default function ChatPage() {
   }, [isStreaming, cancelStream, setActiveConversation]);
 
   return (
-    <div style={{
+    <div className="chat-shell" style={{
       display: 'flex', height: '100vh',
       background: '#0A0A12', color: '#e2e8f0',
       fontFamily: 'Inter, system-ui, sans-serif',
       fontSize: '15px',
     }}>
       {/* Sidebar */}
-      <aside style={{
+      <aside className="chat-sidebar" style={{
         width: '260px', flexShrink: 0,
         background: '#111118',
         borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -95,11 +95,11 @@ export default function ChatPage() {
       </aside>
 
       {/* Main area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+      <main className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         {/* Search panel */}
         <SearchPanel open={showSearch} onClose={() => setShowSearch(false)} />
         {/* Header */}
-        <header style={{
+        <header className="chat-header" style={{
           height: '48px', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 20px',
@@ -159,13 +159,6 @@ export default function ChatPage() {
               GPT-4o
             </span>
           </div>
-          <span style={{
-            fontSize: '11px', padding: '3px 8px', borderRadius: '6px',
-            background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.15)',
-            color: '#a78bfa',
-          }}>
-            GPT-4o
-          </span>
         </header>
 
         {/* Chat + Pipeline */}

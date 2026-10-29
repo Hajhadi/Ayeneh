@@ -2,22 +2,25 @@
 
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
+import { Menu, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
   title?: string;
+  onMenuClick?: () => void;
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, onMenuClick }: HeaderProps) {
   const { user, logout } = useAuthStore();
 
   return (
-    <header className="flex h-16 items-center justify-between px-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(22,22,30,0.8)' }}>
-      <h1 className="text-lg font-semibold" style={{ color: '#fff' }}>{title || 'Ayeneh'}</h1>
+    <header className="app-header">
+      <div className="flex items-center gap-3">
+        <button className="mobile-only sidebar-icon-button" onClick={onMenuClick} aria-label="Open navigation"><Menu size={20} /></button>
+        <div><p className="eyebrow"><Sparkles size={11} /> COGNITIVE MIRROR</p><h1 className="text-[15px] font-semibold text-white">{title || 'Ayeneh'}</h1></div>
+      </div>
       <div className="flex items-center gap-4">
-        {user && <span className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{user.email}</span>}
-        <Button variant="ghost" size="sm" onClick={logout}>
-          Sign out
-        </Button>
+        {user && <span className="hidden text-xs text-white/40 sm:block">{user.email}</span>}
+        <Button variant="ghost" size="sm" onClick={logout}><span className="hidden sm:inline">Sign out</span><span className="sm:hidden">Exit</span></Button>
       </div>
     </header>
   );

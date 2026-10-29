@@ -2,12 +2,16 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { MarkdownRenderer } from '@/components/common/markdown-renderer';
+import { ThinkingPanel, type ThinkingStep } from '@/components/chat/thinking-panel';
 import type { Message } from '@/types/conversation';
 
 interface ChatWindowProps {
   messages: Message[];
   isStreaming: boolean;
   streamingContent: string;
+  thinkingSteps?: ThinkingStep[];
+  thinkingComplete?: boolean;
+  thinkingTotalMs?: number;
 }
 
 function UserBubble({ message }: { message: Message }) {
@@ -99,7 +103,14 @@ function WelcomeState() {
   );
 }
 
-export function ChatWindow({ messages, isStreaming, streamingContent }: ChatWindowProps) {
+export function ChatWindow({
+  messages,
+  isStreaming,
+  streamingContent,
+  thinkingSteps = [],
+  thinkingComplete = false,
+  thinkingTotalMs = 0,
+}: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
 
@@ -118,6 +129,14 @@ export function ChatWindow({ messages, isStreaming, streamingContent }: ChatWind
   return (
     <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl px-5 py-6" style={{ minHeight: '100%' }}>
+        {(thinkingSteps.length > 0 || isStreaming) && (
+          <ThinkingPanel
+            steps={thinkingSteps}
+            isComplete={thinkingComplete}
+            totalMs={thinkingTotalMs}
+            isActive={isStreaming}
+          />
+        )}
         {messages.length === 0 && !isStreaming && <WelcomeState />}
         {messages.map(m => m.role === 'user'
           ? <UserBubble key={m.id} message={m} />

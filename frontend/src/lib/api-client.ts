@@ -1,4 +1,14 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const ENV_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/** Resolve the API endpoint at request time so the Android build can be pointed
+ * at a deployed backend from Settings without requiring a new APK. */
+export function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const configured = window.localStorage.getItem('ayeneh_api_url');
+    if (configured?.trim()) return configured.trim().replace(/\/$/, '');
+  }
+  return ENV_API_BASE.replace(/\/$/, '');
+}
 
 interface RequestConfig extends RequestInit {
   params?: Record<string, string>;
@@ -22,7 +32,7 @@ export async function apiClient<T>(
 ): Promise<T> {
   const { params, ...fetchConfig } = config;
 
-  let url = `${API_BASE}${endpoint}`;
+  let url = `${getApiBase()}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams(params);
     url += `?${searchParams.toString()}`;

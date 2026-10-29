@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Message, SSEPipelineStage } from '@/types/conversation';
+import type { Message } from '@/types/conversation';
 
 export interface ThinkingStep {
   stage: string;

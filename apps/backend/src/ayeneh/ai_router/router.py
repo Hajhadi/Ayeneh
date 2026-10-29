@@ -4,21 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from ayeneh.ai_router.capabilities import (
-    Capability, CapabilitySet, get_required_capabilities, score_provider,
+    Capability,
+    get_required_capabilities,
+    score_provider,
 )
 from ayeneh.ai_router.metrics import MetricsCollector
 from ayeneh.ai_router.policies import PolicyEngine
-from ayeneh.ai_router.providers import AIProvider
 from ayeneh.ai_router.registry import ProviderRegistry
-from ayeneh.ai_router.retry import RetryManager
 from ayeneh.ai_router.types import (
-    AITask, AITaskType, ProviderType, RoutingDecision, RoutingMetrics,
+    AITask,
+    RoutingDecision,
+    RoutingMetrics,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from ayeneh.ai_router.retry import RetryManager
 
 logger = structlog.get_logger(__name__)
 
@@ -80,7 +87,9 @@ class AIRouter:
                     chosen_model=getattr(provider, "_model", "unknown"),
                     routing_reason=f"forced provider: {force_provider}",
                     policy_used="forced",
-                    estimated_cost=provider.estimate_cost(task.max_tokens // 2, task.max_tokens // 2),
+                    estimated_cost=provider.estimate_cost(
+                        task.max_tokens // 2, task.max_tokens // 2
+                    ),
                     estimated_tokens=task.max_tokens,
                     confidence=1.0,
                 )
@@ -91,9 +100,12 @@ class AIRouter:
             provider_caps = provider.get_capabilities()
 
             # Check if provider has OFFLINE capability for offline mode
-            if task.context.get("offline_mode") and not provider_caps.supports_any([
-                Capability.OFFLINE, Capability.LOCAL_ONLY,
-            ]):
+            if task.context.get("offline_mode") and not provider_caps.supports_any(
+                [
+                    Capability.OFFLINE,
+                    Capability.LOCAL_ONLY,
+                ]
+            ):
                 continue
 
             health = self._registry.get_health(name)
@@ -204,32 +216,38 @@ class AIRouter:
 
                     usage = result.get("usage", {})
                     tokens = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
-                    cost = prov.estimate_cost(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+                    cost = prov.estimate_cost(
+                        usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+                    )
 
-                    self._metrics.record_routing(RoutingMetrics(
-                        task_type=task.task_type,
-                        provider=provider_name,
-                        model=getattr(prov, "_model", ""),
-                        latency_ms=latency_ms,
-                        tokens_used=tokens,
-                        cost_usd=cost,
-                        success=True,
-                        fallback_used=is_fallback or bool(decision.fallbacks_used),
-                    ))
+                    self._metrics.record_routing(
+                        RoutingMetrics(
+                            task_type=task.task_type,
+                            provider=provider_name,
+                            model=getattr(prov, "_model", ""),
+                            latency_ms=latency_ms,
+                            tokens_used=tokens,
+                            cost_usd=cost,
+                            success=True,
+                            fallback_used=is_fallback or bool(decision.fallbacks_used),
+                        )
+                    )
 
                     return result
 
                 except Exception as exc:
                     last_error = exc
                     latency_ms = (time.monotonic() - start) * 1000
-                    self._metrics.record_routing(RoutingMetrics(
-                        task_type=task.task_type,
-                        provider=provider_name,
-                        model=getattr(prov, "_model", ""),
-                        latency_ms=latency_ms,
-                        success=False,
-                        fallback_used=is_fallback,
-                    ))
+                    self._metrics.record_routing(
+                        RoutingMetrics(
+                            task_type=task.task_type,
+                            provider=provider_name,
+                            model=getattr(prov, "_model", ""),
+                            latency_ms=latency_ms,
+                            success=False,
+                            fallback_used=is_fallback,
+                        )
+                    )
 
                     # Check if we should retry the same provider
                     if self._retry_manager and self._retry_manager.should_retry(attempt, exc):
