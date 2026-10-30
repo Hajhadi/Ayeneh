@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { BookProfilePanel } from '@/components/library/book-profile-panel';
 import type { Book } from '@/types/api';
 import { listLocalDocuments, removeLocalDocument, saveLocalDocument, type LocalDocument } from '@/lib/local-data';
+import { extractDocumentText } from '@/lib/document-text';
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -23,9 +24,10 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
   const [fileName, setFileName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setError('');
@@ -33,22 +35,17 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
     setFileName(file.name);
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '));
 
-    if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setContent(ev.target?.result as string);
-      };
-      reader.readAsText(file);
-    } else {
-      setContent('');
-    }
+    setExtracting(true);
+    try { setContent(await extractDocumentText(file)); }
+    catch (error) { setError(error instanceof Error ? error.message : 'خواندن متن فایل انجام نشد'); setContent(''); }
+    finally { setExtracting(false); }
   };
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
     setUploading(true);
     try {
-      await saveLocalDocument({ title, author, file, text: content });
+      await saveLocalDocument({ title, author, file, text: content, extractedText: content });
       onSaved();
     } catch (err) {
       console.error(err);
@@ -106,8 +103,8 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
 
         <div className="mt-4 flex justify-end gap-3">
           <Button variant="outline" onClick={onSaved}>لغو</Button>
-          <Button onClick={handleSubmit} disabled={uploading || !title.trim()}>
-            {uploading ? 'در حال آپلود...' : 'ذخیره و ساخت پروفایل'}
+          <Button onClick={handleSubmit} disabled={uploading || extracting || !title.trim()}>
+            {extracting ? 'در حال خواندن فایل...' : uploading ? 'در حال ذخیره...' : 'ذخیره در آینه'}
           </Button>
         </div>
         {error && <p className="mt-3 rounded-md px-3 py-2 text-xs" style={{ color: '#fca5a5', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.2)' }}>{error}</p>}

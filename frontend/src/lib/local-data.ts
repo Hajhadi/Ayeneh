@@ -25,6 +25,7 @@ export interface LocalDocument {
   size: number;
   created_at: string;
   content: Blob;
+  text_content: string;
 }
 
 interface StoredMessage extends Message {
@@ -107,6 +108,7 @@ export async function saveLocalDocument(input: {
   author?: string;
   file?: File | null;
   text?: string;
+  extractedText?: string;
 }): Promise<LocalDocument> {
   const title = input.title.trim();
   if (!title) throw new Error('Document title is required');
@@ -118,6 +120,7 @@ export async function saveLocalDocument(input: {
     file_name: file?.name || `${title}.txt`,
     mime_type: file?.type || 'text/plain', size: content.size,
     created_at: new Date().toISOString(), content,
+    text_content: (input.extractedText || text).slice(0, 1_500_000),
   };
   const db = await database();
   const tx = db.transaction('documents', 'readwrite');
@@ -125,6 +128,31 @@ export async function saveLocalDocument(input: {
   tx.objectStore('documents').put(document);
   await done;
   return document;
+}
+
+export interface LocalDocumentExcerpt {
+  document_id: string;
+  title: string;
+  excerpt: string;
+  score: number;
+}
+
+export async function searchLocalDocuments(query: string, limit = 4): Promise<LocalDocumentExcerpt[]> {
+  const terms = searchTerms(query).slice(0, 10);
+  if (!terms.length) return [];
+  const documents = await listLocalDocuments();
+  return documents.map((document) => {
+    const haystack = `${document.title} ${document.text_content}`.toLocaleLowerCase();
+    const matches = terms.filter((term) => haystack.includes(term)).length;
+    if (!matches || !document.text_content.trim()) return null;
+    const firstTerm = terms.find((term) => haystack.includes(term)) || '';
+    const position = haystack.indexOf(firstTerm);
+    const start = Math.max(0, position - 320);
+    const excerpt = document.text_content.slice(start, start + 1100).trim();
+    return { document_id: document.id, title: document.title, excerpt, score: matches / terms.length };
+  }).filter((item): item is LocalDocumentExcerpt => !!item)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 export async function removeLocalDocument(id: string): Promise<void> {
