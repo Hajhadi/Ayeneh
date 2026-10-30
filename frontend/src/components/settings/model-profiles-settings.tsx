@@ -27,6 +27,7 @@ export function ModelProfilesSettings() {
   const [baseUrl, setBaseUrl] = useState(SERVICE_OPTIONS[0].baseUrl);
   const [model, setModel] = useState(SERVICE_OPTIONS[0].model);
   const [apiKey, setApiKey] = useState('');
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const supported = secureModelAvailable();
@@ -51,6 +52,7 @@ export function ModelProfilesSettings() {
     setModel(serviceOption('openai').model);
     setApiKey('');
     setStatus('');
+    setConfirmRemoveId(null);
   }
 
   function edit(profile: ModelProfile) {
@@ -61,6 +63,7 @@ export function ModelProfilesSettings() {
     setModel(profile.model);
     setApiKey('');
     setStatus('');
+    setConfirmRemoveId(null);
   }
 
   function changeService(value: Service) {
@@ -104,11 +107,11 @@ export function ModelProfilesSettings() {
   }
 
   async function remove(profile: ModelProfile) {
-    if (!window.confirm(`Remove ${profile.label} and its saved API key from this phone?`)) return;
     try {
       await SecureModel.removeProfile({ provider: profile.provider });
       if (editingId === profile.provider) newConnection();
       await refresh();
+      setConfirmRemoveId(null);
       setStatus('Connection removed.');
     } catch (error) {
       setStatus(String(error));
@@ -134,7 +137,10 @@ export function ModelProfilesSettings() {
           <div className="mt-3 flex gap-3 text-xs">
             {activeProvider !== profile.provider && <button type="button" onClick={() => activate(profile.provider)} className="text-violet-300">Use</button>}
             <button type="button" onClick={() => edit(profile)} className="text-white/65">Edit</button>
-            <button type="button" onClick={() => remove(profile)} className="text-red-300">Remove</button>
+            {confirmRemoveId === profile.provider ? <>
+              <button type="button" onClick={() => { void remove(profile); }} className="font-medium text-red-200">Confirm remove</button>
+              <button type="button" onClick={() => setConfirmRemoveId(null)} className="text-white/50">Cancel</button>
+            </> : <button type="button" onClick={() => setConfirmRemoveId(profile.provider)} className="text-red-300">Remove</button>}
           </div>
         </div>)}
       </div>}
@@ -160,7 +166,7 @@ export function ModelProfilesSettings() {
             <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Enter the model ID from your provider"
               className="mt-1 w-full rounded-md border border-white/10 bg-[#10101b] px-3 py-2 text-white" />
           </label>
-          <label className="block text-sm text-white/60">API key {existing && !needsKey ? '(leave blank to keep saved key)' : ''}
+          <label className="block text-sm text-white/60">API key {existing && !needsKey ? '(leave blank to keep saved key; enter a new key to replace it)' : ''}
             <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password"
               autoComplete="off" spellCheck={false} placeholder="Enter your key on the phone"
               className="mt-1 w-full rounded-md border border-white/10 bg-[#10101b] px-3 py-2 text-white" />
