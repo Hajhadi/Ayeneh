@@ -162,6 +162,7 @@ export default function ChatPage() {
             </button>
             <button className="mobile-history-button" onClick={() => setShowConversationDrawer(true)} aria-label="Open chat history" style={{ display: 'none', placeItems: 'center', width: '30px', height: '30px', borderRadius: '8px', color: '#c4b5fd', background: 'rgba(124,58,237,.12)', border: '1px solid rgba(167,139,250,.2)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16M4 12h16M4 19h10" /></svg>
+              <span>تاریخچه</span>
             </button>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" style={{ opacity: 0.6 }}>
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
