@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { QueryProvider } from '@/providers/query-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { ToastProvider } from '@/providers/toast-provider';
@@ -8,6 +8,13 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Ayeneh — Cognitive Companion',
   description: 'A mirror for self-observation, cognitive growth, and long-term reflection.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#08080f',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
