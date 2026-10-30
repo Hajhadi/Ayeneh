@@ -12,6 +12,9 @@ import { Button } from '@/components/ui/button';
 import { BookProfilePanel } from '@/components/library/book-profile-panel';
 import type { Book } from '@/types/api';
 import { listLocalDocuments, removeLocalDocument, saveLocalDocument, type LocalDocument } from '@/lib/local-data';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 function UploadForm({ onSaved }: { onSaved: () => void }) {
   const [title, setTitle] = useState('');
@@ -20,10 +23,12 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
   const [fileName, setFileName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError('');
     setFile(file);
     setFileName(file.name);
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '));
@@ -47,6 +52,7 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
       onSaved();
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : 'ذخیره‌سازی فایل انجام نشد');
     } finally {
       setUploading(false);
     }
@@ -104,6 +110,7 @@ function UploadForm({ onSaved }: { onSaved: () => void }) {
             {uploading ? 'در حال آپلود...' : 'ذخیره و ساخت پروفایل'}
           </Button>
         </div>
+        {error && <p className="mt-3 rounded-md px-3 py-2 text-xs" style={{ color: '#fca5a5', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.2)' }}>{error}</p>}
       </div>
     </div>
   );
@@ -244,6 +251,7 @@ export default function LibraryPage() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [textTarget, setTextTarget] = useState<Book | null>(null);
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
+  const [documentError, setDocumentError] = useState('');
   const { data, isLoading, error, refetch } = useBooks();
   const deleteMutation = useDeleteBook();
   const reindexMutation = useReindexBook();
@@ -256,10 +264,30 @@ export default function LibraryPage() {
 
   useEffect(() => { void refreshLocalDocuments(); }, []);
 
-  function openLocalDocument(document: LocalDocument) {
-    const url = URL.createObjectURL(document.content);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  async function openLocalDocument(document: LocalDocument) {
+    setDocumentError('');
+    if (!Capacitor.isNativePlatform()) {
+      const url = URL.createObjectURL(document.content);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return;
+    }
+    // Android WebView does not reliably render blob: PDF URLs. Write the
+    // selected file to the app cache and hand it to the device PDF viewer.
+    const bytes = new Uint8Array(await document.content.arrayBuffer());
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    const base64 = btoa(binary);
+    const { uri } = await Filesystem.writeFile({
+      path: `ayeneh/${document.id}-${document.file_name.replace(/[^\w.-]+/g, '_')}`,
+      data: base64,
+      directory: Directory.Cache,
+      recursive: true,
+    });
+    await Share.share({ title: document.title, text: 'Open this Ayeneh document', files: [uri], dialogTitle: 'Open document' });
   }
 
   return (
@@ -291,12 +319,13 @@ export default function LibraryPage() {
                 <h2 className="text-sm font-semibold" style={{ color: '#fff' }}>اسناد ذخیره‌شده روی دستگاه</h2>
                 <span className="text-xs" style={{ color: 'rgba(255,255,255,.35)' }}>{localDocuments.length} سند</span>
               </div>
+              {documentError && <p className="mb-2 rounded-md px-3 py-2 text-xs" style={{ color: '#fca5a5', background: 'rgba(239,68,68,.1)' }}>{documentError}</p>}
               <div className="grid gap-3 sm:grid-cols-2">
                 {localDocuments.map((document) => (
                   <LocalDocumentCard
                     key={document.id}
                     document={document}
-                    onOpen={() => openLocalDocument(document)}
+                    onOpen={() => { void openLocalDocument(document).catch((error) => setDocumentError(error instanceof Error ? error.message : 'بازکردن سند انجام نشد')); }}
                     onDelete={async () => { await removeLocalDocument(document.id); await refreshLocalDocuments(); }}
                   />
                 ))}
