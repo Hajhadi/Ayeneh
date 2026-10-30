@@ -24,7 +24,7 @@ export async function extractDocumentText(file: File): Promise<string> {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
       const text = content.items
-        .map((item) => 'str' in item ? item.str : '')
+        .map((item) => 'str' in item ? pdfjs.normalizeUnicode(item.str).normalize('NFKC') : '')
         .join(' ')
         .replace(/[ \t]+/g, ' ')
         .trim();
