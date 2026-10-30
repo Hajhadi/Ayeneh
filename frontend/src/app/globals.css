@@ -29,8 +29,9 @@ body {
   overflow: hidden !important;
 }
 
-.app-frame { display: flex; min-height: 100vh; background: radial-gradient(circle at 80% -20%, rgba(124,58,237,.12), transparent 35%), var(--bg-primary); }
-.app-main { display: flex; min-width: 0; min-height: 100vh; flex: 1; flex-direction: column; }
+.app-frame { display: flex; width: 100%; height: 100vh; min-height: 0; background: radial-gradient(circle at 80% -20%, rgba(124,58,237,.12), transparent 35%), var(--bg-primary); }
+.app-main { display: flex; width: 100%; min-width: 0; height: 100vh; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.page-scroll-area { min-height: 0; overflow-y: auto !important; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 .app-sidebar { display: flex; height: 100vh; flex-shrink: 0; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border-subtle); background: linear-gradient(180deg, rgba(18,18,30,.96), rgba(12,12,20,.98)); }
 .app-header { display: flex; height: 68px; flex-shrink: 0; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding: 0 28px; background: rgba(14,14,23,.66); backdrop-filter: blur(18px); }
 .page-heading { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding: 24px 32px; background: rgba(18,18,30,.42); }
@@ -150,7 +151,7 @@ body {
 .app-header { position: relative; z-index: 2; border-color: rgba(255,255,255,.08) !important; background: rgba(12,12,21,.72) !important; box-shadow: 0 10px 35px rgba(0,0,0,.12); }
 .page-heading { border-color: rgba(255,255,255,.08) !important; background: linear-gradient(90deg, rgba(18,17,31,.84), rgba(13,13,22,.54)) !important; }
 .page-heading h1 { color: #f7f5ff !important; letter-spacing: -.035em; }
-.app-main > .flex-1.overflow-auto { position: relative; }
+.app-main > .flex-1.overflow-auto, .app-main > .page-scroll-area { position: relative; min-height: 0; }
 .app-main .rounded-lg, .app-main .rounded-xl, .app-main .rounded-2xl { border-color: rgba(185,174,255,.12) !important; background: linear-gradient(145deg, rgba(30,29,45,.76), rgba(15,15,25,.78)) !important; box-shadow: 0 14px 42px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.035); }
 .app-main .bg-white, .app-main .bg-gray-50, .app-main .bg-gray-100 { background: linear-gradient(145deg, rgba(30,29,45,.76), rgba(15,15,25,.78)) !important; }
 .app-main .text-gray-900, .app-main .text-gray-800, .app-main .text-gray-700 { color: rgba(247,245,255,.9) !important; }
@@ -162,7 +163,8 @@ body {
 .app-sidebar { position: relative; z-index: 3; border-color: rgba(255,255,255,.08) !important; background: linear-gradient(180deg, rgba(17,16,29,.98), rgba(8,8,15,.99)) !important; }
 @media (max-width: 760px) {
   .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; }
-  .app-main { width: 100%; }
+  .app-main { width: 100%; height: 100vh; }
+  .page-scroll-area { padding: 18px !important; }
 }
 .app-sidebar::after { position: absolute; top: 95px; left: 0; width: 1px; height: 190px; background: linear-gradient(#907cff, transparent); opacity: .65; content: ''; }
 .nav-item { color: rgba(225,221,242,.47); }

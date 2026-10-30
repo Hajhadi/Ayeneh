@@ -19,7 +19,7 @@ export function PageLayout({ title, description, actions, children, className }:
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="flex-1 overflow-auto p-6">{children}</div>
+      <div className="page-scroll-area flex-1 overflow-auto p-6">{children}</div>
     </div>
   );
 }

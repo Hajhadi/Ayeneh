@@ -75,6 +75,10 @@ export function ModelProfilesSettings() {
   }
 
   async function save() {
+    if (service === 'openai' && model.includes('/')) {
+      setStatus('این مدل شامل نام ارائه‌دهنده است و برای OpenRouter به نظر می‌رسد؛ سرویس را روی OpenRouter بگذارید.');
+      return;
+    }
     setBusy(true);
     setStatus('');
     try {
@@ -165,10 +169,12 @@ export function ModelProfilesSettings() {
           <label className="block text-sm text-white/60">Model ID
             <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Enter the model ID from your provider"
               className="mt-1 w-full rounded-md border border-white/10 bg-[#10101b] px-3 py-2 text-white" />
+            {service === 'openai' && model.includes('/') && <span className="mt-1 block text-xs text-amber-200/80">مدل‌هایی مثل <code>recursive/bf16</code> معمولاً متعلق به OpenRouter هستند؛ سرویس را تغییر دهید.</span>}
           </label>
           <label className="block text-sm text-white/60">API key {existing && !needsKey ? '(leave blank to keep saved key; enter a new key to replace it)' : ''}
             <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password"
-              autoComplete="off" spellCheck={false} placeholder="Enter your key on the phone"
+              onPaste={(event) => { const pasted = event.clipboardData.getData('text'); if (pasted) { event.preventDefault(); setApiKey(pasted); } }}
+              autoComplete="off" spellCheck={false} aria-label="API key" placeholder="Enter your key on the phone"
               className="mt-1 w-full rounded-md border border-white/10 bg-[#10101b] px-3 py-2 text-white" />
           </label>
           <Button size="sm" onClick={save} disabled={busy || !baseUrl.startsWith('https://') || !model.trim() || (needsKey && !apiKey.trim())}>Save connection</Button>
