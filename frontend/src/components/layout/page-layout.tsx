@@ -11,7 +11,7 @@ interface PageLayoutProps {
 
 export function PageLayout({ title, description, actions, children, className }: PageLayoutProps) {
   return (
-    <div className={cn('flex flex-1 flex-col', className)}>
+    <div className={cn('page-layout flex flex-1 flex-col', className)}>
       <div className="page-heading">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">{title}</h1>
