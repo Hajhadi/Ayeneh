@@ -14,6 +14,7 @@ import { SecureModel, secureModelAvailable, type ModelProfile } from '@/lib/secu
 export default function ChatPage() {
   const router = useRouter();
   const [showSearch, setShowSearch] = useState(false);
+  const [showConversationDrawer, setShowConversationDrawer] = useState(false);
   const [modelLabel, setModelLabel] = useState('Cloud model');
   const [profiles, setProfiles] = useState<ModelProfile[]>([]);
   const [activeProvider, setActiveProvider] = useState('');
@@ -65,11 +66,13 @@ export default function ChatPage() {
   const onSelect = useCallback((id: string) => {
     if (isStreaming) cancelStream();
     setActiveConversation(id);
+    setShowConversationDrawer(false);
   }, [isStreaming, cancelStream, setActiveConversation]);
 
   const onNew = useCallback(() => {
     if (isStreaming) cancelStream();
     setActiveConversation(null);
+    setShowConversationDrawer(false);
   }, [isStreaming, cancelStream, setActiveConversation]);
 
   return (
@@ -129,6 +132,18 @@ export default function ChatPage() {
         </div>
       </aside>
 
+      {showConversationDrawer && <div className="mobile-conversation-drawer" onClick={() => setShowConversationDrawer(false)}>
+        <aside className="mobile-conversation-panel" onClick={(event) => event.stopPropagation()}>
+          <div className="mobile-conversation-title">
+            <span>Chat history</span>
+            <button type="button" className="mobile-conversation-close" onClick={() => setShowConversationDrawer(false)} aria-label="Close chat history">×</button>
+          </div>
+          <div className="flex-1">
+            <ConversationList activeId={activeConversationId} onSelect={onSelect} onNew={onNew} />
+          </div>
+        </aside>
+      </div>}
+
       {/* Main area */}
       <main className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         {/* Search panel */}
@@ -144,6 +159,9 @@ export default function ChatPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button onClick={() => { if (window.history.length > 1) router.back(); else router.push('/'); }} aria-label="Go back" style={{ display: 'grid', placeItems: 'center', width: '28px', height: '28px', borderRadius: '7px', color: '#a78bfa', background: 'rgba(124,58,237,.08)' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <button className="mobile-history-button" onClick={() => setShowConversationDrawer(true)} aria-label="Open chat history" style={{ display: 'none', placeItems: 'center', width: '30px', height: '30px', borderRadius: '8px', color: '#c4b5fd', background: 'rgba(124,58,237,.12)', border: '1px solid rgba(167,139,250,.2)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16M4 12h16M4 19h10" /></svg>
             </button>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" style={{ opacity: 0.6 }}>
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
