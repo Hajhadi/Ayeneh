@@ -17,7 +17,7 @@ interface ChatWindowProps {
 function UserBubble({ message }: { message: Message }) {
   return (
     <div className="flex justify-end mb-3 msg-in">
-      <div className="max-w-[72%] rounded-2xl rounded-br-sm px-4 py-2.5"
+      <div className="message-bubble message-bubble-user max-w-[72%] rounded-2xl rounded-br-sm px-4 py-2.5"
            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', color: '#fff', fontSize: 'var(--text-sm)', lineHeight: '1.6' }}>
         {message.content}
       </div>
@@ -29,7 +29,7 @@ function AssistantBubble({ message }: { message: Message }) {
   return (
     <div className="flex justify-start mb-3 msg-in">
       <div className="flex gap-2.5 max-w-[78%]">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+        <div className="mirror-avatar w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
              style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -39,7 +39,7 @@ function AssistantBubble({ message }: { message: Message }) {
           </svg>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="rounded-xl px-4 py-2.5" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', fontSize: 'var(--text-sm)', lineHeight: '1.6' }}>
+          <div className="message-bubble message-bubble-assistant rounded-xl px-4 py-2.5" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', fontSize: 'var(--text-sm)', lineHeight: '1.6' }}>
             <MarkdownRenderer content={message.content} />
           </div>
         </div>
@@ -52,7 +52,7 @@ function StreamingBubble({ content }: { content: string }) {
   return (
     <div className="flex justify-start mb-3 msg-in">
       <div className="flex gap-2.5 max-w-[78%]">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+        <div className="mirror-avatar w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
              style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
             <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
@@ -60,7 +60,7 @@ function StreamingBubble({ content }: { content: string }) {
           </svg>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="rounded-xl px-4 py-2.5" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', fontSize: 'var(--text-sm)' }}>
+          <div className="message-bubble message-bubble-assistant rounded-xl px-4 py-2.5" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', fontSize: 'var(--text-sm)' }}>
             {content || (
               <div className="flex gap-1.5 items-center py-0.5">
                 <span className="w-1.5 h-1.5 rounded-full typing-dot" style={{ background: 'var(--accent)' }} />
@@ -77,7 +77,7 @@ function StreamingBubble({ content }: { content: string }) {
 
 function WelcomeState() {
   return (
-    <div className="flex flex-col items-center justify-center h-full msg-in select-none">
+    <div className="chat-welcome flex flex-col items-center justify-center h-full msg-in select-none">
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 8px 32px rgba(124,58,237,0.25)' }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.5">
@@ -92,7 +92,7 @@ function WelcomeState() {
       </p>
       <div className="flex gap-1.5 mt-4">
         {['Reflection', 'Growth', 'Knowledge'].map(t => (
-          <span key={t} className="px-2.5 py-1 rounded-full text-[10px] font-medium"
+          <span key={t} className="welcome-pill px-2.5 py-1 rounded-full text-[10px] font-medium"
                 style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: '#a78bfa' }}>
             {t}
           </span>

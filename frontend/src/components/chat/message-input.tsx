@@ -23,7 +23,7 @@ export function MessageInput({ onSend, onCancel, disabled = false, isStreaming =
 
   return (
     <div className="shrink-0 px-5 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#16161e' }}>
-      <div className="mx-auto max-w-3xl flex items-end gap-2.5 rounded-2xl p-2.5 input-ring"
+      <div className="message-composer mx-auto max-w-3xl flex items-end gap-2.5 rounded-2xl p-2.5 input-ring"
            style={{ background: '#1e1e2a', border: '1px solid rgba(255,255,255,0.08)' }}>
         <textarea
           ref={ref}
@@ -33,18 +33,17 @@ export function MessageInput({ onSend, onCancel, disabled = false, isStreaming =
           placeholder="Type a message..."
           rows={1}
           disabled={disabled || isStreaming}
-          className="flex-1 resize-none bg-transparent outline-none disabled:opacity-40"
+          className="composer-textarea flex-1 resize-none bg-transparent outline-none disabled:opacity-40"
           style={{ fontSize: 'var(--text-sm)', color: '#e2e8f0', minHeight: '36px', maxHeight: '140px' }}
         />
         {isStreaming ? (
-          <button onClick={onCancel} className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
+          <button onClick={onCancel} className="composer-stop w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
                   style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
                   aria-label="Stop generating">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           </button>
         ) : (
-          <button onClick={send} disabled={!value.trim() || disabled}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-20"
+          <button onClick={send} disabled={!value.trim() || disabled} className="composer-send w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-20"
                   style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', color: '#fff' }}
                   aria-label="Send">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

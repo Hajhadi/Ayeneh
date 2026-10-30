@@ -172,6 +172,29 @@ body {
 .nav-item-active { color: #e2dcff !important; border-color: rgba(167,139,250,.17) !important; background: linear-gradient(90deg, rgba(124,58,237,.2), rgba(124,58,237,.035)) !important; box-shadow: inset 3px 0 #947fff, 0 5px 20px rgba(63,44,160,.1); }
 .app-main .shadow-sm, .app-main .shadow-md { box-shadow: 0 14px 42px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.035) !important; }
 
+/* Soft premium interaction layer: depth comes from restrained light, not heavy gradients. */
+.app-main button, .app-sidebar button, .message-composer { -webkit-tap-highlight-color: transparent; }
+.app-main button:not([disabled]), .app-sidebar button:not([disabled]) { transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s ease, background .22s ease, border-color .22s ease; }
+.app-main button:not([disabled]):active, .app-sidebar button:not([disabled]):active { transform: scale(.96); }
+.chat-main { background: radial-gradient(circle at 50% -12%, rgba(119,91,255,.12), transparent 38%), linear-gradient(180deg, #0b0b14, #08080f); }
+.message-bubble { position: relative; overflow: hidden; box-shadow: 0 10px 26px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.08); transition: transform .22s ease, box-shadow .22s ease; }
+.message-bubble:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.11); }
+.message-bubble-user { background: linear-gradient(145deg, #8664ff 0%, #5b55e8 68%, #4b64d8 100%) !important; border: 1px solid rgba(202,193,255,.28); box-shadow: 0 12px 30px rgba(93,74,220,.28), inset 0 1px rgba(255,255,255,.24); }
+.message-bubble-assistant { background: linear-gradient(145deg, rgba(41,39,62,.88), rgba(24,24,37,.92)) !important; border-color: rgba(189,178,255,.15) !important; }
+.mirror-avatar { position: relative; background: linear-gradient(145deg, #906cff, #504de3) !important; border: 1px solid rgba(221,215,255,.3); box-shadow: 0 7px 18px rgba(97,76,221,.3), inset 0 1px rgba(255,255,255,.35); animation: avatarGlow 4s ease-in-out infinite; }
+.chat-welcome { position: relative; }
+.chat-welcome::before { position: absolute; width: 230px; height: 230px; border-radius: 50%; background: rgba(111,77,255,.12); filter: blur(54px); content: ''; pointer-events: none; animation: welcomeBreath 5s ease-in-out infinite; }
+.welcome-pill { border-radius: 999px; box-shadow: inset 0 1px rgba(255,255,255,.1), 0 5px 15px rgba(91,70,200,.1); transition: transform .22s ease, background .22s ease, box-shadow .22s ease; }
+.welcome-pill:hover { transform: translateY(-2px); background: rgba(124,58,237,.18) !important; box-shadow: 0 8px 20px rgba(91,70,200,.2); }
+.message-composer { border-color: rgba(189,178,255,.18) !important; background: linear-gradient(145deg, rgba(39,36,62,.92), rgba(20,20,32,.94)) !important; box-shadow: 0 18px 46px rgba(0,0,0,.26), inset 0 1px rgba(255,255,255,.08); }
+.composer-textarea::placeholder { color: rgba(225,220,247,.34); transition: color .2s ease; }
+.message-composer:focus-within .composer-textarea::placeholder { color: rgba(225,220,247,.2); }
+.composer-send { border: 1px solid rgba(218,211,255,.2); background: linear-gradient(145deg, #9879ff, #5955e8) !important; box-shadow: 0 8px 22px rgba(94,73,222,.4), inset 0 1px rgba(255,255,255,.34); }
+.composer-send:not([disabled]):hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 27px rgba(94,73,222,.52), inset 0 1px rgba(255,255,255,.4); }
+.composer-stop { box-shadow: 0 7px 18px rgba(239,68,68,.16), inset 0 1px rgba(255,255,255,.12); }
+@keyframes avatarGlow { 0%, 100% { box-shadow: 0 7px 18px rgba(97,76,221,.26), inset 0 1px rgba(255,255,255,.3); } 50% { box-shadow: 0 9px 25px rgba(97,76,221,.46), inset 0 1px rgba(255,255,255,.42); } }
+@keyframes welcomeBreath { 0%, 100% { opacity: .45; transform: scale(.9); } 50% { opacity: .8; transform: scale(1.08); } }
+
 /* Chat is the product's primary moment: give it the same quiet depth. */
 .chat-shell { position: relative; isolation: isolate; background: #08080f !important; }
 .chat-shell::before { position: absolute; z-index: -1; top: -170px; left: 35%; width: 560px; height: 360px; border-radius: 50%; background: rgba(102,75,255,.1); filter: blur(90px); content: ''; pointer-events: none; }
