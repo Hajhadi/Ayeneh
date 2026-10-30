@@ -96,6 +96,44 @@ body {
 @keyframes drawerFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes drawerSlide { from { opacity: .5; transform: translateX(-100%); } to { opacity: 1; transform: translateX(0); } }
 
+/* The first visual pass was dark-only. Keep the same layout and motion, but
+   give the selected Light/System theme a real surface and contrast system. */
+html.light { color-scheme: light; --bg-primary: #f5f7fb; --bg-secondary: #edf1f7; --bg-surface: #ffffff; --text-primary: #172033; --text-secondary: #526078; --text-muted: #77839a; --border-subtle: rgba(35,50,78,.13); }
+html.light body { background: #f5f7fb !important; color: #172033 !important; }
+html.light .app-frame { background: radial-gradient(circle at 80% -20%, rgba(124,58,237,.11), transparent 35%), #f5f7fb !important; }
+html.light .app-main { background: radial-gradient(circle at 80% 0%, rgba(111,77,255,.1), transparent 32%), #f5f7fb !important; }
+html.light .app-header { border-color: rgba(35,50,78,.12) !important; background: rgba(255,255,255,.78) !important; box-shadow: 0 10px 35px rgba(50,70,110,.08); }
+html.light .page-heading { border-color: rgba(35,50,78,.12) !important; background: linear-gradient(90deg, rgba(255,255,255,.9), rgba(242,245,251,.75)) !important; }
+html.light .page-heading h1, html.light .app-main h1, html.light .app-main h2, html.light .app-main h3, html.light .app-main h4 { color: #172033 !important; }
+html.light .app-main .rounded-lg, html.light .app-main .rounded-xl, html.light .app-main .rounded-2xl { border-color: rgba(35,50,78,.13) !important; background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(239,243,249,.92)) !important; box-shadow: 0 14px 38px rgba(50,70,110,.1), inset 0 1px rgba(255,255,255,.85); }
+html.light .app-main .text-gray-900, html.light .app-main .text-gray-800, html.light .app-main .text-gray-700 { color: #25324a !important; }
+html.light .app-main .text-gray-600, html.light .app-main .text-gray-500, html.light .app-main .text-gray-400 { color: #647189 !important; }
+html.light .app-main input, html.light .app-main textarea, html.light .app-main select { border-color: rgba(35,50,78,.16) !important; background: rgba(255,255,255,.82) !important; color: #172033 !important; box-shadow: inset 3px 3px 8px rgba(50,70,110,.05), 0 1px rgba(255,255,255,.8); }
+html.light .app-main input::placeholder, html.light .app-main textarea::placeholder { color: #8a96aa !important; }
+html.light .app-sidebar { border-color: rgba(35,50,78,.12) !important; background: linear-gradient(180deg, #ffffff, #eef2f8) !important; }
+html.light .nav-item { color: #647189; }
+html.light .nav-item:hover { color: #25324a; background: rgba(124,58,237,.07); }
+html.light .nav-item-active { color: #5540b5 !important; border-color: rgba(124,58,237,.16) !important; background: linear-gradient(90deg, rgba(124,58,237,.14), rgba(124,58,237,.04)) !important; }
+html.light .chat-shell, html.light .chat-main { background: #f5f7fb !important; }
+html.light .chat-sidebar { background: linear-gradient(180deg, #ffffff, #eef2f8) !important; border-color: rgba(35,50,78,.12) !important; }
+html.light .chat-header { background: rgba(255,255,255,.8) !important; border-color: rgba(35,50,78,.12) !important; }
+html.light .chat-main .input-ring, html.light .message-composer { background: linear-gradient(145deg, #ffffff, #edf1f7) !important; border-color: rgba(35,50,78,.16) !important; box-shadow: 0 14px 38px rgba(50,70,110,.1), inset 0 1px rgba(255,255,255,.9); }
+html.light .chat-main .input-ring textarea, html.light .composer-textarea { color: #172033 !important; }
+html.light .message-bubble-assistant { background: linear-gradient(145deg, #ffffff, #edf1f7) !important; border-color: rgba(35,50,78,.12) !important; color: #25324a !important; }
+html.light .mobile-conversation-panel { background: linear-gradient(180deg, #ffffff, #eef2f8); border-color: rgba(35,50,78,.14); box-shadow: 18px 0 55px rgba(50,70,110,.2); }
+html.light .mobile-conversation-title { color: #25324a; border-color: rgba(35,50,78,.1); }
+html.light .mirror-landing { background: #f5f7fb; color: #172033; }
+html.light .mirror-landing::before { background: radial-gradient(circle at 50% 14%, rgba(101,79,255,.16), transparent 30%), radial-gradient(circle at 8% 74%, rgba(38,198,218,.12), transparent 26%), linear-gradient(145deg, #f5f7fb, #e9edf7 54%, #f8faff); }
+html.light .mirror-brand { color: #172033; }
+html.light .mirror-status { color: rgba(37,50,74,.58); }
+html.light .mirror-hero h1 { color: #172033; }
+html.light .mirror-lede { color: rgba(37,50,74,.68); }
+html.light .mirror-compose-shell { background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(232,237,247,.94)); border-color: rgba(89,72,180,.2); box-shadow: 0 28px 80px rgba(50,70,110,.15), inset 0 1px rgba(255,255,255,.9); }
+html.light .mirror-compose-shell textarea { color: #172033; }
+html.light .mirror-compose-shell textarea::placeholder { color: rgba(37,50,74,.45); }
+html.light .mirror-floating-dock { background: rgba(255,255,255,.72); border-color: rgba(89,72,180,.2); box-shadow: 0 14px 38px rgba(50,70,110,.14), inset 0 1px rgba(255,255,255,.9); }
+html.light .mirror-dock-item { color: rgba(37,50,74,.58); }
+
 /* ── Premium mirror landing ── */
 .mirror-landing {
   position: relative;
