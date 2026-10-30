@@ -289,11 +289,33 @@ html.light .mirror-dock-item { color: rgba(37,50,74,.58); }
 .chat-header { border-color: rgba(255,255,255,.08) !important; background: rgba(13,13,22,.72) !important; }
 .chat-sidebar > div:first-child { border-color: rgba(255,255,255,.08) !important; background: linear-gradient(90deg, rgba(124,58,237,.08), transparent) !important; }
 .chat-main > .flex-1 { background: radial-gradient(circle at 50% 20%, rgba(124,58,237,.04), transparent 42%); }
+.chat-main > .flex-1 { position: relative; }
+.chat-welcome { position: relative; gap: 0; padding: 30px 18px 42px; }
+.chat-welcome > div:first-child { position: relative; width: 92px; height: 92px; margin-bottom: 25px; border: 1px solid rgba(202,193,255,.32); border-radius: 28px; background: linear-gradient(140deg, #8c60ff, #5348df 66%, #25c6d5) !important; box-shadow: 0 0 0 8px rgba(124,58,237,.06), 0 0 55px rgba(113,79,255,.42), inset 0 1px rgba(255,255,255,.48); transform: rotate(6deg); }
+.chat-welcome > div:first-child::before { position: absolute; inset: -14px; border: 1px solid rgba(167,139,250,.25); border-top-color: rgba(110,229,220,.8); border-radius: 34px; content: ''; animation: mirrorSpin 18s linear infinite; }
+.chat-welcome > div:first-child::after { position: absolute; right: -13px; bottom: 2px; width: 11px; height: 11px; border-radius: 50%; background: #59e3bd; box-shadow: 0 0 20px #59e3bd; content: ''; }
+.chat-welcome > div:first-child svg { transform: rotate(-6deg) scale(1.25); }
+.chat-welcome h2 { margin-bottom: 8px; color: #f8f7ff !important; font-size: 30px; font-weight: 650; letter-spacing: -.06em; }
+.chat-welcome > p { max-width: 390px; color: rgba(231,229,244,.58) !important; font-size: 13px; line-height: 1.8; }
+.chat-welcome .welcome-pill { padding: 9px 14px; border-color: rgba(194,181,255,.24) !important; background: linear-gradient(145deg, rgba(124,94,241,.18), rgba(68,60,140,.08)) !important; color: rgba(218,211,255,.9) !important; box-shadow: inset 0 1px rgba(255,255,255,.1), 0 7px 18px rgba(0,0,0,.14); }
+.chat-welcome > p:last-child { margin-top: 22px; color: rgba(225,220,247,.3) !important; letter-spacing: .08em; text-transform: uppercase; }
+.chat-header > div:first-child { min-width: 0; }
+.chat-header > div:first-child > span { overflow: hidden; max-width: 145px; white-space: nowrap; text-overflow: ellipsis; }
+.chat-main .message-composer { border-radius: 22px !important; padding: 12px 13px !important; }
+.chat-main .composer-textarea { min-height: 40px !important; padding: 8px 5px; }
+.chat-main .composer-send, .chat-main .composer-stop { width: 40px !important; height: 40px !important; border-radius: 14px !important; }
 .chat-main .input-ring { border-color: rgba(181,168,255,.18) !important; background: linear-gradient(145deg, rgba(34,32,51,.9), rgba(19,19,30,.88)) !important; box-shadow: 0 14px 42px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.05); transition: border-color .3s, box-shadow .3s, transform .3s; }
 .chat-main .input-ring:focus-within { border-color: rgba(151,132,255,.62) !important; box-shadow: 0 17px 50px rgba(74,53,206,.2), 0 0 0 4px rgba(125,100,255,.06); transform: translateY(-1px); }
 .chat-main .input-ring textarea { color: #f7f5ff !important; }
 .chat-main .msg-in { animation: messageRise .34s cubic-bezier(.22,1,.36,1); }
 @keyframes messageRise { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 760px) {
+  .chat-welcome { padding: 22px 14px 36px; }
+  .chat-welcome > div:first-child { width: 82px; height: 82px; border-radius: 25px; }
+  .chat-welcome h2 { font-size: 28px; }
+  .chat-header > div:first-child > span { max-width: 92px; }
+}
 
 h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea {
   color: inherit;
