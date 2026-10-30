@@ -6,7 +6,7 @@ import type {
 } from '@/types/conversation';
 
 const DB_NAME = 'ayeneh-local';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface MemoryExcerpt {
   id: string;
@@ -14,6 +14,17 @@ export interface MemoryExcerpt {
   content: string;
   created_at: string;
   score: number;
+}
+
+export interface LocalDocument {
+  id: string;
+  title: string;
+  author: string;
+  file_name: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  content: Blob;
 }
 
 interface StoredMessage extends Message {
@@ -51,13 +62,21 @@ function database(): Promise<IDBDatabase> {
       const open = indexedDB.open(DB_NAME, DB_VERSION);
       open.onupgradeneeded = () => {
         const db = open.result;
-        const conversations = db.createObjectStore('conversations', { keyPath: 'id' });
-        conversations.createIndex('updated_at', 'updated_at');
-        conversations.createIndex('status_updated', ['status', 'updated_at']);
-        const messages = db.createObjectStore('messages', { keyPath: 'id' });
-        messages.createIndex('conversation_sequence', ['conversation_id', 'sequence_number']);
-        messages.createIndex('search_terms', 'search_terms', { multiEntry: true });
-        db.createObjectStore('digests', { keyPath: 'conversation_id' });
+        if (!db.objectStoreNames.contains('conversations')) {
+          const conversations = db.createObjectStore('conversations', { keyPath: 'id' });
+          conversations.createIndex('updated_at', 'updated_at');
+          conversations.createIndex('status_updated', ['status', 'updated_at']);
+        }
+        if (!db.objectStoreNames.contains('messages')) {
+          const messages = db.createObjectStore('messages', { keyPath: 'id' });
+          messages.createIndex('conversation_sequence', ['conversation_id', 'sequence_number']);
+          messages.createIndex('search_terms', 'search_terms', { multiEntry: true });
+        }
+        if (!db.objectStoreNames.contains('digests')) db.createObjectStore('digests', { keyPath: 'conversation_id' });
+        if (!db.objectStoreNames.contains('documents')) {
+          const documents = db.createObjectStore('documents', { keyPath: 'id' });
+          documents.createIndex('created_at', 'created_at');
+        }
       };
       open.onsuccess = () => {
         const db = open.result;
@@ -72,6 +91,48 @@ function database(): Promise<IDBDatabase> {
     });
   }
   return opening;
+}
+
+export async function listLocalDocuments(): Promise<LocalDocument[]> {
+  const db = await database();
+  const tx = db.transaction('documents', 'readonly');
+  const done = finished(tx);
+  const documents = await request<LocalDocument[]>(tx.objectStore('documents').getAll());
+  await done;
+  return documents.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function saveLocalDocument(input: {
+  title: string;
+  author?: string;
+  file?: File | null;
+  text?: string;
+}): Promise<LocalDocument> {
+  const title = input.title.trim();
+  if (!title) throw new Error('Document title is required');
+  const file = input.file;
+  const text = input.text || '';
+  const content = file || new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const document: LocalDocument = {
+    id: crypto.randomUUID(), title, author: input.author?.trim() || '',
+    file_name: file?.name || `${title}.txt`,
+    mime_type: file?.type || 'text/plain', size: content.size,
+    created_at: new Date().toISOString(), content,
+  };
+  const db = await database();
+  const tx = db.transaction('documents', 'readwrite');
+  const done = finished(tx);
+  tx.objectStore('documents').put(document);
+  await done;
+  return document;
+}
+
+export async function removeLocalDocument(id: string): Promise<void> {
+  const db = await database();
+  const tx = db.transaction('documents', 'readwrite');
+  const done = finished(tx);
+  tx.objectStore('documents').delete(id);
+  await done;
 }
 
 export function searchTerms(text: string): string[] {

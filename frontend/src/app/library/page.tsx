@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useBooks, useUploadBook, useDeleteBook, useReindexBook, useBookProgress, useAddBookText } from '@/hooks/use-api';
+import { useBooks, useDeleteBook, useReindexBook, useBookProgress, useAddBookText } from '@/hooks/use-api';
 import { PageLayout } from '@/components/layout/page-layout';
 import { SkeletonList } from '@/components/common/skeleton';
 import { ErrorState } from '@/components/common/error-state';
@@ -11,20 +11,20 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { BookProfilePanel } from '@/components/library/book-profile-panel';
 import type { Book } from '@/types/api';
+import { listLocalDocuments, removeLocalDocument, saveLocalDocument, type LocalDocument } from '@/lib/local-data';
 
-function UploadForm({ onClose }: { onClose: () => void }) {
+function UploadForm({ onSaved }: { onSaved: () => void }) {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [content, setContent] = useState('');
   const [fileName, setFileName] = useState('');
-  const [mode, setMode] = useState<'file' | 'text'>('file');
+  const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const addText = useAddBookText();
-  const uploadBook = useUploadBook();
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setFile(file);
     setFileName(file.name);
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '));
 
@@ -32,12 +32,10 @@ function UploadForm({ onClose }: { onClose: () => void }) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setContent(ev.target?.result as string);
-        setMode('text');
       };
       reader.readAsText(file);
     } else {
-      setContent(`[فایل ${file.name} — برای PDF/DOC ابتدا متن را کپی کنید]`);
-      setMode('text');
+      setContent('');
     }
   };
 
@@ -45,19 +43,8 @@ function UploadForm({ onClose }: { onClose: () => void }) {
     if (!title.trim()) return;
     setUploading(true);
     try {
-      if (content.trim() && !content.startsWith('[فایل')) {
-        // Create book first, then add text
-        const result = await uploadBook.mutateAsync({
-          title, author, content: 'placeholder', filename: `${title}.txt`,
-        });
-        await addText.mutateAsync({ bookId: result.id, content });
-        onClose();
-      } else {
-        await uploadBook.mutateAsync({
-          title, author, content: content || 'Empty document', filename: `${title}.txt`,
-        });
-        onClose();
-      }
+      await saveLocalDocument({ title, author, file, text: content });
+      onSaved();
     } catch (err) {
       console.error(err);
     } finally {
@@ -112,7 +99,7 @@ function UploadForm({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="mt-4 flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>لغو</Button>
+          <Button variant="outline" onClick={onSaved}>لغو</Button>
           <Button onClick={handleSubmit} disabled={uploading || !title.trim()}>
             {uploading ? 'در حال آپلود...' : 'ذخیره و ساخت پروفایل'}
           </Button>
@@ -221,17 +208,59 @@ function BookCard({ book, onDelete, onReindex, onSelect, isSelected, onAddText }
   );
 }
 
+function LocalDocumentCard({ document, onDelete, onOpen }: {
+  document: LocalDocument; onDelete: () => void; onOpen: () => void;
+}) {
+  const isPdf = document.mime_type === 'application/pdf' || document.file_name.toLowerCase().endsWith('.pdf');
+  const size = document.size < 1024 * 1024
+    ? `${Math.max(1, Math.round(document.size / 1024))} KB`
+    : `${(document.size / (1024 * 1024)).toFixed(1)} MB`;
+  return (
+    <div className="rounded-lg p-4" style={{ border: '1px solid rgba(34,197,94,.2)', background: 'linear-gradient(145deg, rgba(34,197,94,.07), rgba(26,26,46,.76))' }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold" style={{ color: '#fff' }}>{document.title}</h3>
+          {document.author && <p className="text-xs" style={{ color: 'rgba(255,255,255,.4)' }}>{document.author}</p>}
+        </div>
+        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px]" style={{ color: '#4ade80', background: 'rgba(34,197,94,.12)' }}>روی دستگاه</span>
+      </div>
+      <div className="mt-2 flex items-center gap-3 text-xs" style={{ color: 'rgba(255,255,255,.35)' }}>
+        <span>{isPdf ? 'PDF' : document.file_name.split('.').pop()?.toUpperCase() || 'TEXT'}</span>
+        <span>{size}</span>
+        <span>{new Date(document.created_at).toLocaleDateString()}</span>
+      </div>
+      <div className="mt-3 flex gap-3" onClick={(event) => event.stopPropagation()}>
+        <button onClick={onOpen} className="text-xs text-purple-400 hover:text-purple-300">باز کردن</button>
+        <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300">حذف</button>
+      </div>
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const [showUpload, setShowUpload] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Book | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [textTarget, setTextTarget] = useState<Book | null>(null);
+  const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const { data, isLoading, error, refetch } = useBooks();
   const deleteMutation = useDeleteBook();
   const reindexMutation = useReindexBook();
 
   const books = data?.data || [];
+
+  async function refreshLocalDocuments() {
+    try { setLocalDocuments(await listLocalDocuments()); } catch (loadError) { console.error(loadError); }
+  }
+
+  useEffect(() => { void refreshLocalDocuments(); }, []);
+
+  function openLocalDocument(document: LocalDocument) {
+    const url = URL.createObjectURL(document.content);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 
   return (
     <PageLayout
@@ -248,13 +277,31 @@ export default function LibraryPage() {
         {/* Book list */}
         <div className={`${selectedBook ? 'w-1/2' : 'w-full'} transition-all`}>
           {isLoading && <SkeletonList count={3} />}
-          {error && <ErrorState message="Failed to load books" onRetry={() => refetch()} />}
-          {!isLoading && !error && books.length === 0 && (
+          {error && !localDocuments.length && <ErrorState message="Failed to load books. Local documents are still available." onRetry={() => refetch()} />}
+          {!isLoading && !error && books.length === 0 && !localDocuments.length && (
             <EmptyState
               title="No documents yet"
               description="Upload books and documents to build your knowledge base."
               action={<Button onClick={() => setShowUpload(true)}>Upload First Document</Button>}
             />
+          )}
+          {localDocuments.length > 0 && (
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold" style={{ color: '#fff' }}>اسناد ذخیره‌شده روی دستگاه</h2>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,.35)' }}>{localDocuments.length} سند</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {localDocuments.map((document) => (
+                  <LocalDocumentCard
+                    key={document.id}
+                    document={document}
+                    onOpen={() => openLocalDocument(document)}
+                    onDelete={async () => { await removeLocalDocument(document.id); await refreshLocalDocuments(); }}
+                  />
+                ))}
+              </div>
+            </div>
           )}
           <div className={`grid gap-3 ${selectedBook ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
             {books.map((b) => (
@@ -279,7 +326,7 @@ export default function LibraryPage() {
         )}
       </div>
 
-      {showUpload && <UploadForm onClose={() => setShowUpload(false)} />}
+      {showUpload && <UploadForm onSaved={() => { setShowUpload(false); void refreshLocalDocuments(); }} />}
       {textTarget && <ManualTextForm book={textTarget} onClose={() => setTextTarget(null)} />}
 
       <ConfirmDialog
