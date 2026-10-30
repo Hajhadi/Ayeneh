@@ -2,6 +2,8 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export interface ModelProfile {
   provider: string;
+  service: 'openai' | 'openrouter' | 'gemini' | 'anthropic' | 'compatible';
+  label: string;
   baseUrl: string;
   model: string;
   hasKey: boolean;

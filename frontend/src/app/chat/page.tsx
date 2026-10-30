@@ -9,18 +9,20 @@ import { ChatWindow } from '@/components/chat/chat-window';
 import { MessageInput } from '@/components/chat/message-input';
 import { ConversationList } from '@/components/chat/conversation-list';
 import { SearchPanel } from '@/components/chat/search-panel';
-import { SecureModel, secureModelAvailable } from '@/lib/secure-model';
+import { SecureModel, secureModelAvailable, type ModelProfile } from '@/lib/secure-model';
 
 export default function ChatPage() {
   const router = useRouter();
   const [showSearch, setShowSearch] = useState(false);
   const [modelLabel, setModelLabel] = useState('Cloud model');
+  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
+  const [activeProvider, setActiveProvider] = useState('');
   const initialPromptHandled = useRef(false);
   const {
     activeConversationId, messages: storeMessages,
     isStreaming, streamingContent, setMessages, setActiveConversation,
     thinkingSteps, thinkingComplete, thinkingTotalMs,
-    chatError,
+    chatError, setChatError,
   } = useChatStore();
   const { sendMessage, cancelStream } = useStreamChat();
   const { data: messagesData } = useConversationMessages(activeConversationId);
@@ -36,10 +38,23 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!secureModelAvailable()) { setModelLabel('Backend'); return; }
-    SecureModel.listProfiles().then(({ profiles, activeProvider }) => {
-      setModelLabel(profiles.find((item) => item.provider === activeProvider)?.model || 'Set up model');
+    SecureModel.listProfiles().then(({ profiles: saved, activeProvider: active }) => {
+      setProfiles(saved);
+      setActiveProvider(active);
+      setModelLabel(saved.find((item) => item.provider === active)?.label || 'Set up model');
     }).catch(() => setModelLabel('Set up model'));
   }, []);
+
+  async function changeModel(provider: string) {
+    if (!provider || isStreaming) return;
+    try {
+      await SecureModel.setActiveProvider({ provider });
+      setActiveProvider(provider);
+      setModelLabel(profiles.find((item) => item.provider === provider)?.label || 'Cloud model');
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Could not switch model');
+    }
+  }
 
   useEffect(() => {
     if (messagesData?.data && !isStreaming) {
@@ -178,13 +193,17 @@ export default function ChatPage() {
                 <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
               </svg>
             </button>
-            <span style={{
-              fontSize: '11px', padding: '3px 8px', borderRadius: '6px',
-              background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.15)',
-              color: '#a78bfa',
-            }}>
-              {modelLabel}
-            </span>
+            {secureModelAvailable() ? <select
+              aria-label="Active model"
+              value={activeProvider}
+              onChange={(event) => { void changeModel(event.target.value); }}
+              disabled={isStreaming || profiles.length === 0}
+              style={{ maxWidth: '112px', fontSize: '11px', padding: '3px 4px', borderRadius: '6px',
+                background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.15)', color: '#a78bfa' }}
+            >
+              {!activeProvider && <option value="">Set up model</option>}
+              {profiles.map((profile) => <option key={profile.provider} value={profile.provider}>{profile.label}</option>)}
+            </select> : <span style={{ fontSize: '11px', color: '#a78bfa' }}>Backend</span>}
           </div>
         </header>
 

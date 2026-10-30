@@ -22,7 +22,14 @@ The runtime streaming endpoint accepts `conversation_history` and
 `memory_context` from the app. It no longer reads or writes chat messages at a
 hard-coded SQLite path. The current Python pipeline still needs a running
 service for web responses, and other legacy screens still call that service.
-On Android, Chat can instead call an OpenAI-compatible cloud model directly.
+On Android, Chat can instead call the selected cloud model directly.
+Settings now stores any number of named model connections, including multiple
+keys for the same service. The user can switch the active connection in Settings
+or from Chat. Native adapters support OpenAI, OpenRouter, Google Gemini, and
+Anthropic Claude; an additional option accepts any HTTPS service that implements
+the OpenAI Chat Completions protocol. Existing saved OpenAI/OpenRouter/custom
+profiles are read with their original encrypted keys and can be edited without
+re-entering a key unless their service or URL changes.
 The API key is encrypted by Android Keystore and stays in the app's private
 storage. During setup, the key passes through the settings form and native bridge
 once; the form clears after saving. Later, JavaScript sends only the prompt and
