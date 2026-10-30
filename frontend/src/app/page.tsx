@@ -75,6 +75,8 @@ export default function HomePage() {
           <div className="mirror-symbol-ring mirror-symbol-ring-two" />
           <div className="mirror-symbol-core"><span /></div>
           <div className="mirror-symbol-spark" />
+          <span className="mirror-orbit-chip mirror-orbit-chip-one">NOTICE</span>
+          <span className="mirror-orbit-chip mirror-orbit-chip-two">REFLECT</span>
         </motion.div>
 
         <motion.h1 initial="hidden" animate="visible" variants={reveal} custom={0.16}>
@@ -110,6 +112,14 @@ export default function HomePage() {
               ><ArrowUpRight size={19} /></motion.button>
             </div>
           </div>
+        </motion.div>
+
+        <motion.div className="mirror-signal-card" initial="hidden" animate="visible" variants={reveal} custom={0.45}>
+          <div className="mirror-signal-copy">
+            <span><i /> INNER SIGNAL · LIVE</span>
+            <strong>A small thought is asking to be noticed.</strong>
+          </div>
+          <div className="mirror-wave" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} />)}</div>
         </motion.div>
 
         <motion.div className="mirror-pills" initial="hidden" animate="visible" variants={reveal} custom={0.5}>
