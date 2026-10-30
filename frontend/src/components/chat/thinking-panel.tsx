@@ -56,7 +56,7 @@ export function ThinkingPanel({ steps, isComplete, totalMs, isActive }: Thinking
   };
 
   return (
-    <div style={{
+    <div className="thinking-panel" style={{
       background: '#0D0D14',
       border: '1px solid rgba(255,255,255,0.06)',
       borderRadius: '12px',
@@ -104,7 +104,7 @@ export function ThinkingPanel({ steps, isComplete, totalMs, isActive }: Thinking
           return (
             <div key={`${step.stage}-${i}`}>
               {/* Step row */}
-              <div
+              <div className="thinking-step"
                 onClick={() => setExpanded(isExpanded ? null : step.stage)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
