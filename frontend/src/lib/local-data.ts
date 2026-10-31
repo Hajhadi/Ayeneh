@@ -6,7 +6,7 @@ import type {
 } from '@/types/conversation';
 
 const DB_NAME = 'ayeneh-local';
-const DB_VERSION = 2;
+export const LOCAL_DB_VERSION = 3;
 
 export interface MemoryExcerpt {
   id: string;
@@ -60,7 +60,7 @@ function database(): Promise<IDBDatabase> {
   }
   if (!opening) {
     opening = new Promise<IDBDatabase>((resolve, reject) => {
-      const open = indexedDB.open(DB_NAME, DB_VERSION);
+      const open = indexedDB.open(DB_NAME, LOCAL_DB_VERSION);
       open.onupgradeneeded = () => {
         const db = open.result;
         if (!db.objectStoreNames.contains('conversations')) {
@@ -77,6 +77,16 @@ function database(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains('documents')) {
           const documents = db.createObjectStore('documents', { keyPath: 'id' });
           documents.createIndex('created_at', 'created_at');
+        }
+        if (!db.objectStoreNames.contains('habits')) {
+          const habits = db.createObjectStore('habits', { keyPath: 'id' });
+          habits.createIndex('created_at', 'created_at');
+          habits.createIndex('archived_created', ['archived', 'created_at']);
+        }
+        if (!db.objectStoreNames.contains('habit_entries')) {
+          const entries = db.createObjectStore('habit_entries', { keyPath: 'id' });
+          entries.createIndex('habit_date', ['habit_id', 'date']);
+          entries.createIndex('date', 'date');
         }
       };
       open.onsuccess = () => {
@@ -373,28 +383,32 @@ export async function removePinnedNote(id: string): Promise<void> {
 
 export async function exportLocalData(): Promise<string> {
   const db = await database();
-  const tx = db.transaction(['conversations', 'messages', 'digests'], 'readonly');
+  const tx = db.transaction(['conversations', 'messages', 'digests', 'habits', 'habit_entries'], 'readonly');
   const done = finished(tx);
-  const [conversations, messages, digests] = await Promise.all([
+  const [conversations, messages, digests, habits, habit_entries] = await Promise.all([
     request<Conversation[]>(tx.objectStore('conversations').getAll()),
     request<StoredMessage[]>(tx.objectStore('messages').getAll()),
     request<Digest[]>(tx.objectStore('digests').getAll()),
+    request<unknown[]>(tx.objectStore('habits').getAll()),
+    request<unknown[]>(tx.objectStore('habit_entries').getAll()),
   ]);
   await done;
-  return JSON.stringify({ schema_version: DB_VERSION, exported_at: new Date().toISOString(), conversations, messages, digests });
+  return JSON.stringify({ schema_version: LOCAL_DB_VERSION, exported_at: new Date().toISOString(), conversations, messages, digests, habits, habit_entries });
 }
 
 export async function importLocalData(json: string): Promise<void> {
   const parsed: unknown = JSON.parse(json);
   if (!parsed || typeof parsed !== 'object') throw new Error('Invalid backup file');
   const data = parsed as Record<string, unknown>;
-  if (data.schema_version !== DB_VERSION || !Array.isArray(data.conversations)
+  if (![2, LOCAL_DB_VERSION].includes(data.schema_version as number) || !Array.isArray(data.conversations)
     || !Array.isArray(data.messages) || !Array.isArray(data.digests)) {
     throw new Error('Unsupported Ayeneh backup version');
   }
   const conversations = data.conversations as Conversation[];
   const messages = data.messages as StoredMessage[];
   const digests = data.digests as Digest[];
+  const habits = Array.isArray(data.habits) ? data.habits as Record<string, unknown>[] : [];
+  const habitEntries = Array.isArray(data.habit_entries) ? data.habit_entries as Record<string, unknown>[] : [];
   if (conversations.some((item) => !item || typeof item.id !== 'string' || typeof item.title !== 'string')
     || messages.some((item) => !item || typeof item.id !== 'string' || typeof item.conversation_id !== 'string'
       || typeof item.content !== 'string' || !['user', 'assistant'].includes(item.role))
@@ -402,14 +416,18 @@ export async function importLocalData(json: string): Promise<void> {
     throw new Error('Backup contains invalid records');
   }
   const db = await database();
-  const tx = db.transaction(['conversations', 'messages', 'digests'], 'readwrite');
+  const tx = db.transaction(['conversations', 'messages', 'digests', 'habits', 'habit_entries'], 'readwrite');
   const done = finished(tx);
   const conversationStore = tx.objectStore('conversations');
   const messageStore = tx.objectStore('messages');
   const digestStore = tx.objectStore('digests');
+  const habitStore = tx.objectStore('habits');
+  const habitEntryStore = tx.objectStore('habit_entries');
   for (const item of conversations) conversationStore.put(item);
   for (const item of messages) messageStore.put({ ...item, search_terms: searchTerms(item.content) });
   for (const item of digests) digestStore.put(item);
+  for (const item of habits) if (typeof item.id === 'string') habitStore.put(item);
+  for (const item of habitEntries) if (typeof item.id === 'string') habitEntryStore.put(item);
   await done;
 }
 

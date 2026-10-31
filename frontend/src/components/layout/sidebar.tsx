@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Brain, ChevronRight, CircleUserRound, LayoutDashboard, MessageCircle, PanelLeftClose, Settings2, Sparkles, X } from 'lucide-react';
+import { Brain, CheckCircle2, ChevronRight, CircleUserRound, LayoutDashboard, MessageCircle, PanelLeftClose, Settings2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Memories', href: '/memories', icon: Brain, group: 'Understand' },
   { name: 'Patterns', href: '/patterns', icon: Sparkles, group: 'Understand' },
   { name: 'Reflections', href: '/reflections', icon: Sparkles, group: 'Understand' },
+  { name: 'Habits', href: '/habits', icon: CheckCircle2, group: 'Understand' },
   { name: 'Blind Spots', href: '/blind-spots', icon: CircleUserRound, group: 'Understand' },
   { name: 'Library', href: '/library', icon: LayoutDashboard, group: 'Explore' },
   { name: 'Diagnostics', href: '/diagnostics', icon: Settings2, group: 'System' },
