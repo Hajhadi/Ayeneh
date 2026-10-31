@@ -15,6 +15,37 @@ function dayLabel(date: string): string {
   return new Intl.DateTimeFormat('en', { weekday: 'short' }).format(new Date(`${date}T12:00:00`)).slice(0, 1);
 }
 
+function weeklyTrend(habits: HabitSnapshot[]) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const endOffset = -((11 - index) * 7);
+    const end = dateKeyOffset(endOffset);
+    const start = dateKeyOffset(endOffset - 6);
+    let completed = 0;
+    let expected = 0;
+    for (const habit of habits) {
+      const inWeek = habit.entries.filter((entry) => entry.date >= start && entry.date <= end);
+      completed += inWeek.filter((entry) => entry.status === 'completed').length;
+      expected += habit.frequency === 'daily' ? 7 : habit.target_per_week;
+    }
+    return { label: new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(`${start}T12:00:00`)), value: expected ? Math.min(100, Math.round((completed / expected) * 100)) : 0 };
+  });
+}
+
+function HabitAnalytics({ habits }: { habits: HabitSnapshot[] }) {
+  const trend = weeklyTrend(habits);
+  const points = trend.map((item, index) => `${18 + index * (604 / 11)},${190 - item.value * 1.48}`).join(' ');
+  const latest = trend[trend.length - 1]?.value || 0;
+  const previous = trend[trend.length - 2]?.value || 0;
+  const delta = latest - previous;
+  return <section className="habit-analytics-grid">
+    <div className="habit-analytics-card habit-trend-card">
+      <div className="habit-analytics-header"><div><p className="eyebrow"><Target size={13} /> LONG VIEW</p><h2>Consistency over time</h2></div><span className={delta >= 0 ? 'trend-up' : 'trend-down'}>{delta >= 0 ? '↗' : '↘'} {Math.abs(delta)}% <small>vs last week</small></span></div>
+      <div className="habit-chart-wrap"><svg viewBox="0 0 640 220" role="img" aria-label="12 week habit consistency trend" preserveAspectRatio="none"><defs><linearGradient id="habit-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#ff9a4d" stopOpacity=".3" /><stop offset="1" stopColor="#ff9a4d" stopOpacity="0" /></linearGradient></defs>{[25, 50, 75].map((line) => <line key={line} x1="18" x2="622" y1={190 - line * 1.48} y2={190 - line * 1.48} className="habit-chart-grid" />)}<polygon points={`18,190 ${points} 622,190`} fill="url(#habit-area)" /><polyline points={points} className="habit-chart-line" />{trend.map((item, index) => <circle key={item.label} cx={18 + index * (604 / 11)} cy={190 - item.value * 1.48} r={index === trend.length - 1 ? 4.5 : 3} className="habit-chart-point"><title>{item.label}: {item.value}%</title></circle>)}</svg><div className="habit-chart-axis"><span>{trend[0].label}</span><span>12 weeks</span><span>{trend[trend.length - 1].label}</span></div></div>
+    </div>
+    <div className="habit-analytics-card habit-bars-card"><div className="habit-analytics-header"><div><p className="eyebrow"><Flame size={13} /> SIGNALS</p><h2>Habit strength</h2></div></div><div className="habit-bars">{habits.map((habit) => <div className="habit-bar-row" key={habit.id}><span title={habit.title}>{habit.title}</span><div><i style={{ width: `${habit.strength}%`, background: `var(--habit-${habit.color}, #ff9a4d)` }} /></div><strong>{habit.strength}%</strong></div>)}</div></div>
+  </section>;
+}
+
 function HabitCard({ habit, onRefresh }: { habit: HabitSnapshot; onRefresh: () => void }) {
   const keys = useMemo(() => recentDateKeys(28), []);
   const statuses = new Map(habit.entries.map((entry) => [entry.date, entry.status]));
@@ -91,7 +122,7 @@ export default function HabitsPage() {
           <div className="habit-form-actions"><button type="button" className="app-secondary-button" onClick={() => setShowForm(false)}>Cancel</button><button className="app-primary-button" disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Add habit'}</button></div>
         </motion.form>}</AnimatePresence>
 
-        {loading ? <div className="habit-empty"><RotateCcw className="animate-spin" size={20} /> Reading your local patterns…</div> : habits.length === 0 ? <div className="habit-empty habit-empty-large"><div className="habit-empty-orbit"><Target size={24} /></div><h2>Give a pattern somewhere to begin</h2><p>Track a small, meaningful practice. The goal is noticing—not becoming perfect.</p><button className="app-primary-button" onClick={() => setShowForm(true)}><Plus size={16} /> Create your first habit</button></div> : <motion.div layout className="habits-list">{habits.map((habit) => <HabitCard key={habit.id} habit={habit} onRefresh={() => void refresh()} />)}</motion.div>}
+        {loading ? <div className="habit-empty"><RotateCcw className="animate-spin" size={20} /> Reading your local patterns…</div> : habits.length === 0 ? <div className="habit-empty habit-empty-large"><div className="habit-empty-orbit"><Target size={24} /></div><h2>Give a pattern somewhere to begin</h2><p>Track a small, meaningful practice. The goal is noticing—not becoming perfect.</p><button className="app-primary-button" onClick={() => setShowForm(true)}><Plus size={16} /> Create your first habit</button></div> : <><motion.div layout className="habits-list">{habits.map((habit) => <HabitCard key={habit.id} habit={habit} onRefresh={() => void refresh()} />)}</motion.div><HabitAnalytics habits={habits} /></>}
         {habits.length > 0 && <p className="habit-privacy-note"><span /> Stored only on this device · summarized before it reaches the cloud model</p>}
       </main>
     </div>
