@@ -58,6 +58,36 @@ function database(): Promise<IDBDatabase> {
   if (!opening.current) {
     opening.current = new Promise<IDBDatabase>((resolve, reject) => {
       const open = indexedDB.open(DB_NAME, LOCAL_DB_VERSION);
+      open.onupgradeneeded = () => {
+        const db = open.result;
+        // This module can be the first local feature opened on a fresh install.
+        // Create the shared stores here as well as in local-data's migration.
+        if (!db.objectStoreNames.contains('conversations')) {
+          const conversations = db.createObjectStore('conversations', { keyPath: 'id' });
+          conversations.createIndex('updated_at', 'updated_at');
+          conversations.createIndex('status_updated', ['status', 'updated_at']);
+        }
+        if (!db.objectStoreNames.contains('messages')) {
+          const messages = db.createObjectStore('messages', { keyPath: 'id' });
+          messages.createIndex('conversation_sequence', ['conversation_id', 'sequence_number']);
+          messages.createIndex('search_terms', 'search_terms', { multiEntry: true });
+        }
+        if (!db.objectStoreNames.contains('digests')) db.createObjectStore('digests', { keyPath: 'conversation_id' });
+        if (!db.objectStoreNames.contains('documents')) {
+          const documents = db.createObjectStore('documents', { keyPath: 'id' });
+          documents.createIndex('created_at', 'created_at');
+        }
+        if (!db.objectStoreNames.contains('habits')) {
+          const habits = db.createObjectStore('habits', { keyPath: 'id' });
+          habits.createIndex('created_at', 'created_at');
+          habits.createIndex('archived_created', ['archived', 'created_at']);
+        }
+        if (!db.objectStoreNames.contains('habit_entries')) {
+          const entries = db.createObjectStore('habit_entries', { keyPath: 'id' });
+          entries.createIndex('habit_date', ['habit_id', 'date']);
+          entries.createIndex('date', 'date');
+        }
+      };
       open.onsuccess = () => { open.result.onversionchange = () => open.result.close(); resolve(open.result); };
       open.onerror = () => reject(open.error);
     }).catch((error) => { opening.current = undefined; throw error; });
