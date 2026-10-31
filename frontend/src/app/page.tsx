@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUpRight, BookOpen, Eye, LibraryBig, MessageCircle, Settings2, Sparkles, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, BookOpen, CheckCircle2, Eye, LibraryBig, MessageCircle, Settings2, Sparkles, TrendingUp } from 'lucide-react';
 
 const PROMPTS = [
   'What pattern is asking for your attention today?',
@@ -124,6 +124,7 @@ export default function HomePage() {
 
         <nav className="mirror-floating-dock" aria-label="Quick navigation">
           <Link href="/chat" className="mirror-dock-item mirror-dock-active"><MessageCircle size={15} /><span>Reflect</span></Link>
+          <Link href="/habits" className="mirror-dock-item"><CheckCircle2 size={15} /><span>Habits</span></Link>
           <Link href="/library" className="mirror-dock-item"><LibraryBig size={15} /><span>Library</span></Link>
           <Link href="/settings" className="mirror-dock-item"><Settings2 size={15} /><span>Settings</span></Link>
         </nav>
