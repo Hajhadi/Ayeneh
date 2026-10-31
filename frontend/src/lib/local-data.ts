@@ -146,16 +146,20 @@ export async function searchLocalDocuments(query: string, limit = 4): Promise<Lo
   if (!terms.length) return [];
   const documents = await listLocalDocuments();
   return documents.map((document) => {
-    const rawText = `${document.title} ${document.text_content}`.toLocaleLowerCase();
+    // Older local records may predate PDF text extraction and have no
+    // text_content field. They remain openable documents, but must not break
+    // context search for a later chat.
+    const textContent = typeof document.text_content === 'string' ? document.text_content : '';
+    const rawText = `${document.title} ${textContent}`.toLocaleLowerCase();
     // Some Persian PDFs expose glyphs in visual (right-to-left) order. Search
     // both forms so the document remains useful even with those PDF fonts.
-    const repairedText = rtlVariant(document.text_content).toLocaleLowerCase();
+    const repairedText = rtlVariant(textContent).toLocaleLowerCase();
     const rawMatches = terms.filter((term) => rawText.includes(term)).length;
     const repairedMatches = terms.filter((term) => repairedText.includes(term)).length;
-    const sourceText = repairedMatches > rawMatches ? rtlVariant(document.text_content) : document.text_content;
+    const sourceText = repairedMatches > rawMatches ? rtlVariant(textContent) : textContent;
     const haystack = repairedMatches > rawMatches ? repairedText : rawText;
     const matches = Math.max(rawMatches, repairedMatches);
-    if (!matches || !document.text_content.trim()) return null;
+    if (!matches || !textContent.trim()) return null;
     const firstTerm = terms.find((term) => haystack.includes(term)) || '';
     const position = haystack.indexOf(firstTerm);
     const start = Math.max(0, position - 320);
